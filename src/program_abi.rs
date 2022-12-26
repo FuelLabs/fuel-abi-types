@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 //! Defines a set of serializable types required for the Fuel VM ABI.
 
 use proc_macro2::TokenStream;
