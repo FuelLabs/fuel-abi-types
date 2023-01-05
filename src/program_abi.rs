@@ -15,6 +15,7 @@ pub struct ProgramABI {
     pub functions: Vec<ABIFunction>,
     pub logged_types: Option<Vec<LoggedType>>,
     pub messages_types: Option<Vec<MessageType>>,
+    pub configurables: Option<Vec<Configurable>>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -59,6 +60,15 @@ pub struct MessageType {
     pub message_id: u64,
     #[serde(rename = "messageType")]
     pub application: TypeApplication,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Configurable {
+    pub name: String,
+    #[serde(rename = "configurableType")]
+    pub application: TypeApplication,
+    pub offset: u64,
 }
 
 #[derive(Debug, Clone)]
