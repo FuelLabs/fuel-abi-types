@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use fuels_types::program_abi::TypeDeclaration;
+    use fuel_abi_types::program_abi::TypeDeclaration;
 
     #[test]
     fn detects_enum_and_struct_types() {
