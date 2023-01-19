@@ -5,7 +5,7 @@ use regex::Regex;
 ///
 /// # Arguments
 ///
-/// * `type_name`: `type_name` field from [`crate::program_abi::TypeDeclaration`]
+/// * `type_name`: `type_name` field from [`TypeDeclaration`]( `crate::program_abi::TypeDeclaration` )
 pub fn has_tuple_format(type_name: &str) -> bool {
     type_name.starts_with('(') && type_name.ends_with(')')
 }
@@ -14,7 +14,7 @@ pub fn has_tuple_format(type_name: &str) -> bool {
 ///
 /// # Arguments
 ///
-/// * `type_name`: `type_name` field from [`crate::program_abi::TypeDeclaration`]
+/// * `type_name`: `type_name` field from [`TypeDeclaration`]( `crate::program_abi::TypeDeclaration` )
 pub fn extract_generic_name(type_name: &str) -> Option<String> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"^\s*generic\s+(\S+)\s*$").unwrap();
@@ -27,7 +27,7 @@ pub fn extract_generic_name(type_name: &str) -> Option<String> {
 ///
 /// # Arguments
 ///
-/// * `type_name`: `type_name` field from [`crate::program_abi::TypeDeclaration`]
+/// * `type_name`: `type_name` field from [`TypeDeclaration`]( `crate::program_abi::TypeDeclaration` )
 pub fn extract_array_len(type_name: &str) -> Option<usize> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"^\s*\[.+;\s*(\d+)\s*\]\s*$").unwrap();
@@ -45,7 +45,7 @@ pub fn extract_array_len(type_name: &str) -> Option<usize> {
 ///
 /// # Arguments
 ///
-/// * `type_name`: `type_name` field from [`crate::program_abi::TypeDeclaration`]
+/// * `type_name`: `type_name` field from [`TypeDeclaration`]( `crate::program_abi::TypeDeclaration` )
 pub fn extract_str_len(type_name: &str) -> Option<usize> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"^\s*str\s*\[\s*(\d+)\s*\]\s*$").unwrap();
@@ -65,7 +65,7 @@ pub fn extract_str_len(type_name: &str) -> Option<usize> {
 ///
 /// # Arguments
 ///
-/// * `type_name`: `type_name` field from [`crate::program_abi::TypeDeclaration`]
+/// * `type_name`: `type_name` field from [`TypeDeclaration`]( `crate::program_abi::TypeDeclaration` )
 pub fn extract_custom_type_name(type_field: &str) -> Option<String> {
     lazy_static! {
         static ref RE: Regex = Regex::new(r"\s*(?:struct|enum)\s*(\S*)").unwrap();
