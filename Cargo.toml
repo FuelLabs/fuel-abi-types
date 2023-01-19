@@ -11,5 +11,5 @@ description = "Serializable type representation for working with the Fuel VM ABI
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
-proc-macro2 = "1.0"
-strum_macros = "0.21"
+regex = "1.7.1"
+lazy_static = "1.4.0"
