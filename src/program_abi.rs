@@ -1,6 +1,5 @@
 //! Defines a set of serializable types required for the Fuel VM ABI.
 
-use proc_macro2::TokenStream;
 use serde::{Deserialize, Serialize};
 
 /// FuelVM ABI representation in JSON, originally specified
@@ -80,26 +79,9 @@ pub struct Configurable {
     pub offset: u64,
 }
 
-#[derive(Debug, Clone)]
-pub struct ResolvedLog {
-    pub log_id: u64,
-    pub param_type_call: TokenStream,
-    pub resolved_type_name: TokenStream,
-}
-
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Attribute {
     pub name: String,
     pub arguments: Vec<String>,
-}
-
-impl TypeDeclaration {
-    pub fn is_enum_type(&self) -> bool {
-        self.type_field.starts_with("enum ")
-    }
-
-    pub fn is_struct_type(&self) -> bool {
-        self.type_field.starts_with("struct ")
-    }
 }
