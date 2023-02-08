@@ -1,13 +1,13 @@
 use thiserror::Error;
 
 /// Revert with this value for a failing call to `std::revert::require`.
-pub const FAILED_REQUIRE_SIGNAL: u64 = 0xffff_ffff_ffff_0000; 
+pub const FAILED_REQUIRE_SIGNAL: u64 = 0xffff_ffff_ffff_0000;
 
 /// Revert with this value for a failing call to `std::token::transfer_to_address`.
-pub const FAILED_TRANSFER_TO_ADDRESS_SIGNAL: u64 = 0xffff_ffff_ffff_0001; 
+pub const FAILED_TRANSFER_TO_ADDRESS_SIGNAL: u64 = 0xffff_ffff_ffff_0001;
 
 /// Revert with this value for a failing call to `std::message::send_message`.
-pub const FAILED_SEND_MESSAGE_SIGNAL: u64 = 0xffff_ffff_ffff_0002; 
+pub const FAILED_SEND_MESSAGE_SIGNAL: u64 = 0xffff_ffff_ffff_0002;
 
 /// Revert with this value for a failing call to `std::assert::assert_eq`.
 pub const FAILED_ASSERT_EQ_SIGNAL: u64 = 0xffff_ffff_ffff_0003;
@@ -35,15 +35,15 @@ impl ErrorSignal {
     pub fn from_revert_code(revert_code: u64) -> Self {
         if revert_code == FAILED_REQUIRE_SIGNAL {
             Self::Require
-        }else if revert_code == FAILED_TRANSFER_TO_ADDRESS_SIGNAL {
+        } else if revert_code == FAILED_TRANSFER_TO_ADDRESS_SIGNAL {
             Self::TransferToAddress
-        }else if revert_code == FAILED_SEND_MESSAGE_SIGNAL {
+        } else if revert_code == FAILED_SEND_MESSAGE_SIGNAL {
             Self::SendMessage
-        }else if revert_code == FAILED_ASSERT_EQ_SIGNAL {
+        } else if revert_code == FAILED_ASSERT_EQ_SIGNAL {
             Self::AssertEq
-        }else if revert_code == FAILED_ASSERT_SIGNAL {
+        } else if revert_code == FAILED_ASSERT_SIGNAL {
             Self::Assert
-        }else {
+        } else {
             Self::Unknown
         }
     }
