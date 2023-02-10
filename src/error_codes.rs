@@ -32,6 +32,7 @@ pub enum ErrorSignal {
 }
 
 impl ErrorSignal {
+    /// Creates a new `ErrorSignal` from provided `revert_code`.
     pub fn from_revert_code(revert_code: u64) -> Self {
         if revert_code == FAILED_REQUIRE_SIGNAL {
             Self::Require
@@ -45,6 +46,19 @@ impl ErrorSignal {
             Self::Assert
         } else {
             Self::Unknown
+        }
+    }
+
+    /// Converts this `ErrorSignal` to corresponding revert code. If the `ErroSignal` is `Unknown`,
+    /// returns `u64::MAX`.
+    pub fn to_revert_code(self) -> u64 {
+        match self {
+            ErrorSignal::Require => FAILED_REQUIRE_SIGNAL,
+            ErrorSignal::TransferToAddress => FAILED_TRANSFER_TO_ADDRESS_SIGNAL,
+            ErrorSignal::SendMessage => FAILED_SEND_MESSAGE_SIGNAL,
+            ErrorSignal::AssertEq => FAILED_ASSERT_EQ_SIGNAL,
+            ErrorSignal::Assert => FAILED_ASSERT_SIGNAL,
+            ErrorSignal::Unknown => u64::MAX,
         }
     }
 }
