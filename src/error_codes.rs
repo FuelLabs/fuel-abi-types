@@ -27,25 +27,29 @@ pub enum ErrorSignal {
     AssertEq,
     #[error("Failing call to `std::assert::assert`")]
     Assert,
-    #[error("Unknown error signal")]
-    Unknown,
+}
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("Unknown revert code: {0}")]
+    UnknownRevertCode(u64)
 }
 
 impl ErrorSignal {
     /// Creates a new `ErrorSignal` from provided `revert_code`.
-    pub fn from_revert_code(revert_code: u64) -> Self {
+    pub fn try_from_revert_code(revert_code: u64) -> Result<Self, Error> {
         if revert_code == FAILED_REQUIRE_SIGNAL {
-            Self::Require
+            Ok(Self::Require)
         } else if revert_code == FAILED_TRANSFER_TO_ADDRESS_SIGNAL {
-            Self::TransferToAddress
+            Ok(Self::TransferToAddress)
         } else if revert_code == FAILED_SEND_MESSAGE_SIGNAL {
-            Self::SendMessage
+            Ok(Self::SendMessage)
         } else if revert_code == FAILED_ASSERT_EQ_SIGNAL {
-            Self::AssertEq
+            Ok(Self::AssertEq)
         } else if revert_code == FAILED_ASSERT_SIGNAL {
-            Self::Assert
+            Ok(Self::Assert)
         } else {
-            Self::Unknown
+            Err(Error::UnknownRevertCode(revert_code))
         }
     }
 
@@ -58,7 +62,6 @@ impl ErrorSignal {
             ErrorSignal::SendMessage => FAILED_SEND_MESSAGE_SIGNAL,
             ErrorSignal::AssertEq => FAILED_ASSERT_EQ_SIGNAL,
             ErrorSignal::Assert => FAILED_ASSERT_SIGNAL,
-            ErrorSignal::Unknown => u64::MAX,
         }
     }
 }
