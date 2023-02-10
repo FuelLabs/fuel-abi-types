@@ -32,7 +32,7 @@ pub enum ErrorSignal {
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Unknown revert code: {0}")]
-    UnknownRevertCode(u64)
+    UnknownRevertCode(u64),
 }
 
 impl ErrorSignal {
