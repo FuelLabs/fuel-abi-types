@@ -19,7 +19,9 @@ pub fn first_eight_bytes_of_sha256_hash(string: &str) -> [u8; 8] {
 
     let result = hasher.finalize();
 
-    result[..8].try_into().unwrap()
+    let mut output = [0u8; 8];
+    output[..4].copy_from_slice(&result);
+    output
 }
 
 pub fn resolve_fn_selector(
