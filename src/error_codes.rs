@@ -33,11 +33,15 @@ pub enum ErrorSignal {
 pub enum Error {
     #[error("Unknown revert code: {0}")]
     UnknownRevertCode(u64),
+    #[error("TODO: Make this make sense")]
+    FnSelectorResolving,
 }
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 impl ErrorSignal {
     /// Creates a new `ErrorSignal` from provided `revert_code`.
-    pub fn try_from_revert_code(revert_code: u64) -> Result<Self, Error> {
+    pub fn try_from_revert_code(revert_code: u64) -> Result<Self> {
         if revert_code == FAILED_REQUIRE_SIGNAL {
             Ok(Self::Require)
         } else if revert_code == FAILED_TRANSFER_TO_ADDRESS_SIGNAL {
@@ -53,7 +57,7 @@ impl ErrorSignal {
         }
     }
 
-    /// Converts this `ErrorSignal` to corresponding revert code. If the `ErroSignal` is `Unknown`,
+    /// Converts this `ErrorSignal` to corresponding revert code. If the `ErrorSignal` is `Unknown`,
     /// returns `u64::MAX`.
     pub fn to_revert_code(self) -> u64 {
         match self {
