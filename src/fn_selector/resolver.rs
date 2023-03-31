@@ -13,23 +13,23 @@ use crate::{
 /// Used to hash an encoded function selector using SHA256 and returns the first 4 bytes.
 /// The function selector has to have been already encoded following the ABI specs defined
 /// [here](https://github.com/FuelLabs/fuel-specs/blob/1be31f70c757d8390f74b9e1b3beb096620553eb/specs/protocol/abi.md)
-pub fn first_four_bytes_of_sha256_hash(string: &str) -> [u8; 4] {
+pub fn first_eight_bytes_of_sha256_hash(string: &str) -> [u8; 8] {
     let mut hasher = Sha256::default();
     hasher.update(string.as_bytes());
 
     let result = hasher.finalize();
 
-    result[..4].try_into().unwrap()
+    result[..8].try_into().unwrap()
 }
 
 pub fn resolve_fn_selector(
     name: &str,
     arguments: &[TypeApplication],
     type_lookup: &HashMap<usize, TypeDeclaration>,
-) -> error_codes::Result<[u8; 4]> {
+) -> error_codes::Result<[u8; 8]> {
     let fn_signature = resolve_fn_signature(name, arguments, type_lookup)?;
 
-    Ok(first_four_bytes_of_sha256_hash(&fn_signature))
+    Ok(first_eight_bytes_of_sha256_hash(&fn_signature))
 }
 
 /// For when you need to convert a ABI JSON's TypeApplication into a ParamType.
