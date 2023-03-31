@@ -1,9 +1,10 @@
-use std::collections::HashMap;
-use std::iter::zip;
+use std::{collections::HashMap, iter::zip};
 
-use crate::error_codes::{Error, Result};
-use crate::program_abi::{TypeApplication, TypeDeclaration};
-use crate::utils::extract_generic_name;
+use crate::{
+    error_codes::{Error, Result},
+    program_abi::{TypeApplication, TypeDeclaration},
+    utils::extract_generic_name,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ResolvedType {

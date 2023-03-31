@@ -3,10 +3,12 @@ use std::collections::HashMap;
 use itertools::Itertools;
 use sha2::{Digest, Sha256};
 
-use crate::error_codes;
-use crate::fn_selector::resolved_type::ResolvedType;
-use crate::program_abi::{TypeApplication, TypeDeclaration};
-use crate::utils::extract_array_len;
+use crate::{
+    error_codes,
+    fn_selector::resolved_type::ResolvedType,
+    program_abi::{TypeApplication, TypeDeclaration},
+    utils::extract_array_len,
+};
 
 /// Hashes an encoded function selector using SHA256 and returns the first 4 bytes.
 /// The function selector has to have been already encoded following the ABI specs defined
@@ -46,20 +48,24 @@ fn resolve_fn_signature(
     let types = arguments
         .iter()
         .map(|ta| ResolvedType::try_from(ta, type_lookup))
-        .map_ok(|t| fnselectify(&t))
+        .map_ok(|t| fn_signature_format(&t))
         .collect::<error_codes::Result<Vec<_>>>()?
         .join(",");
 
     Ok(format!("{name}({types})"))
 }
 
-fn fnselectify(ttype: &ResolvedType) -> String {
+fn fn_signature_format(ttype: &ResolvedType) -> String {
     match ttype.type_field.as_ref() {
         "raw untyped slice" => "rawslice".into(),
         "raw untyped ptr" => "rawptr".into(),
         struct_typef if struct_typef.starts_with("struct ") => {
-            let strings = ttype.components.iter().map(fnselectify).join(",");
-            let generics = ttype.generic_params.iter().map(fnselectify).join(",");
+            let strings = ttype.components.iter().map(fn_signature_format).join(",");
+            let generics = ttype
+                .generic_params
+                .iter()
+                .map(fn_signature_format)
+                .join(",");
 
             let generics_str = if generics.is_empty() {
                 "".into()
@@ -70,8 +76,12 @@ fn fnselectify(ttype: &ResolvedType) -> String {
             format!("s{generics_str}({strings})")
         }
         enum_typef if enum_typef.starts_with("enum ") => {
-            let strings = ttype.components.iter().map(fnselectify).join(",");
-            let generics = ttype.generic_params.iter().map(fnselectify).join(",");
+            let strings = ttype.components.iter().map(fn_signature_format).join(",");
+            let generics = ttype
+                .generic_params
+                .iter()
+                .map(fn_signature_format)
+                .join(",");
 
             let generics_str = if generics.is_empty() {
                 "".into()
@@ -82,7 +92,7 @@ fn fnselectify(ttype: &ResolvedType) -> String {
             format!("e{generics_str}({strings})")
         }
         tuple_typef if tuple_typef.starts_with('(') && tuple_typef.ends_with(')') => {
-            let strings = ttype.components.iter().map(fnselectify).join(",");
+            let strings = ttype.components.iter().map(fn_signature_format).join(",");
 
             format!("({strings})")
         }
@@ -90,7 +100,7 @@ fn fnselectify(ttype: &ResolvedType) -> String {
             let inner_array_type = ttype
                 .components
                 .iter()
-                .map(fnselectify)
+                .map(fn_signature_format)
                 .next()
                 .expect("should have");
 
@@ -107,9 +117,11 @@ fn fnselectify(ttype: &ResolvedType) -> String {
 mod tests {
     use std::collections::HashMap;
 
-    use crate::error_codes::Result;
-    use crate::fn_selector::resolver::resolve_fn_signature;
-    use crate::program_abi::{TypeApplication, TypeDeclaration};
+    use crate::{
+        error_codes::Result,
+        fn_selector::resolver::resolve_fn_signature,
+        program_abi::{TypeApplication, TypeDeclaration},
+    };
 
     #[test]
     fn handles_simple_types() -> Result<()> {
@@ -145,6 +157,26 @@ mod tests {
         assert_eq!(selector_for("some_fn", "str[21]")?, "some_fn(str[21])");
 
         Ok(())
+    }
+
+    #[test]
+    fn handles_raw_ptr() {
+        let raw_ptr = AbiStubs::new_raw_ptr();
+
+        let signature =
+            resolve_fn_signature("some_fn", &raw_ptr.applications, &raw_ptr.lookup()).unwrap();
+
+        assert_eq!(signature, "some_fn(rawptr)");
+    }
+
+    #[test]
+    fn handles_raw_slice() {
+        let raw_slice = AbiStubs::new_raw_slice();
+
+        let signature =
+            resolve_fn_signature("some_fn", &raw_slice.applications, &raw_slice.lookup()).unwrap();
+
+        assert_eq!(signature, "some_fn(rawslice)");
     }
 
     #[test]
@@ -189,250 +221,37 @@ mod tests {
         Ok(())
     }
 
-    // #[test]
-    // fn handles_vectors() -> Result<()> {
-    //     // given
-    //     let declarations = [
-    //         TypeDeclaration {
-    //             type_id: 1,
-    //             type_field: "generic T".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 2,
-    //             type_field: "raw untyped ptr".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 3,
-    //             type_field: "struct std::vec::RawVec".to_string(),
-    //             components: Some(vec![
-    //                 TypeApplication {
-    //                     name: "ptr".to_string(),
-    //                     type_id: 2,
-    //                     type_arguments: None,
-    //                 },
-    //                 TypeApplication {
-    //                     name: "cap".to_string(),
-    //                     type_id: 5,
-    //                     type_arguments: None,
-    //                 },
-    //             ]),
-    //             type_parameters: Some(vec![1]),
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 4,
-    //             type_field: "struct std::vec::Vec".to_string(),
-    //             components: Some(vec![
-    //                 TypeApplication {
-    //                     name: "buf".to_string(),
-    //                     type_id: 3,
-    //                     type_arguments: Some(vec![TypeApplication {
-    //                         name: "".to_string(),
-    //                         type_id: 1,
-    //                         type_arguments: None,
-    //                     }]),
-    //                 },
-    //                 TypeApplication {
-    //                     name: "len".to_string(),
-    //                     type_id: 5,
-    //                     type_arguments: None,
-    //                 },
-    //             ]),
-    //             type_parameters: Some(vec![1]),
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 5,
-    //             type_field: "u64".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 6,
-    //             type_field: "u8".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //     ];
-
-    //     let type_application = TypeApplication {
-    //         name: "arg".to_string(),
-    //         type_id: 4,
-    //         type_arguments: Some(vec![TypeApplication {
-    //             name: "".to_string(),
-    //             type_id: 6,
-    //             type_arguments: None,
-    //         }]),
-    //     };
-
-    //     let type_lookup = declarations
-    //         .into_iter()
-    //         .map(|decl| (decl.type_id, decl))
-    //         .collect::<HashMap<_, _>>();
-
-    //     // when
-    //     let result = ParamType::try_from_type_application(&type_application, &type_lookup)?;
-
-    //     // then
-    //     assert_eq!(result, ParamType::Vector(Box::new(ParamType::U8)));
-
-    //     Ok(())
-    // }
-
     #[test]
-    fn handles_vectors_2() -> Result<()> {
-        // given
-        let declarations = [
-            TypeDeclaration {
-                type_id: 1,
-                type_field: "generic T".to_string(),
-                components: None,
-                type_parameters: None,
-            },
-            TypeDeclaration {
-                type_id: 2,
-                type_field: "raw untyped ptr".to_string(),
-                components: None,
-                type_parameters: None,
-            },
-            TypeDeclaration {
-                type_id: 3,
-                type_field: "struct std::vec::RawVec".to_string(),
-                components: Some(vec![
-                    TypeApplication {
-                        name: "ptr".to_string(),
-                        type_id: 2,
-                        type_arguments: None,
-                    },
-                    TypeApplication {
-                        name: "cap".to_string(),
-                        type_id: 5,
-                        type_arguments: None,
-                    },
-                ]),
-                type_parameters: Some(vec![1]),
-            },
-            TypeDeclaration {
-                type_id: 4,
-                type_field: "struct std::vec::Vec".to_string(),
-                components: Some(vec![
-                    TypeApplication {
-                        name: "buf".to_string(),
-                        type_id: 3,
-                        type_arguments: Some(vec![TypeApplication {
-                            name: "".to_string(),
-                            type_id: 1,
-                            type_arguments: None,
-                        }]),
-                    },
-                    TypeApplication {
-                        name: "len".to_string(),
-                        type_id: 5,
-                        type_arguments: None,
-                    },
-                ]),
-                type_parameters: Some(vec![1]),
-            },
-            TypeDeclaration {
-                type_id: 5,
-                type_field: "u64".to_string(),
-                components: None,
-                type_parameters: None,
-            },
-            TypeDeclaration {
-                type_id: 6,
-                type_field: "u8".to_string(),
-                components: None,
-                type_parameters: None,
-            },
-        ];
+    fn handles_vectors() {
+        let vector = AbiStubs::new_vector();
 
-        let type_application = TypeApplication {
-            name: "arg".to_string(),
-            type_id: 4,
-            type_arguments: Some(vec![TypeApplication {
-                name: "".to_string(),
-                type_id: 6,
-                type_arguments: None,
-            }]),
-        };
+        let selector =
+            resolve_fn_signature("some_fun", &vector.applications, &vector.lookup()).unwrap();
 
-        let type_lookup = declarations
-            .into_iter()
-            .map(|decl| (decl.type_id, decl))
-            .collect::<HashMap<_, _>>();
-
-        // when
-        let selector = resolve_fn_signature("some_fun", &[type_application], &type_lookup)?;
-        dbg!(&selector);
-
-        // then
         assert_eq!(selector, "some_fun(s<u8>(s<u8>(rawptr,u64),u64))");
-
-        Ok(())
     }
 
     #[test]
-    fn handles_structs() -> Result<()> {
-        // given
-        let custom_type = CustomType::new_struct("SomeStruct");
-        // when
+    fn handles_structs() {
+        let custom_type = AbiStubs::new_struct(false);
+
         let signature =
-            resolve_fn_signature("some_fn", &custom_type.application, &custom_type.lookup())?;
+            resolve_fn_signature("some_fn", &custom_type.applications, &custom_type.lookup())
+                .unwrap();
 
-        // then
         assert_eq!(signature, "some_fn(s(u8))");
-
-        Ok(())
     }
 
     #[test]
     fn handles_generic_structs() -> Result<()> {
-        // given
-        let declarations = [
-            TypeDeclaration {
-                type_id: 1,
-                type_field: "generic T".to_string(),
-                components: None,
-                type_parameters: None,
-            },
-            TypeDeclaration {
-                type_id: 2,
-                type_field: "struct SomeStruct".to_string(),
-                components: Some(vec![TypeApplication {
-                    name: "field".to_string(),
-                    type_id: 1,
-                    type_arguments: None,
-                }]),
-                type_parameters: Some(vec![1]),
-            },
-            TypeDeclaration {
-                type_id: 3,
-                type_field: "u8".to_string(),
-                components: None,
-                type_parameters: None,
-            },
-        ];
-
-        let type_application = TypeApplication {
-            name: "arg".to_string(),
-            type_id: 2,
-            type_arguments: Some(vec![TypeApplication {
-                name: "".to_string(),
-                type_id: 3,
-                type_arguments: None,
-            }]),
-        };
-
-        let type_lookup = declarations
-            .into_iter()
-            .map(|decl| (decl.type_id, decl))
-            .collect::<HashMap<_, _>>();
+        let custom_struct = AbiStubs::new_struct(true);
 
         // when
-        let signature = resolve_fn_signature("some_fn", &[type_application], &type_lookup)?;
+        let signature = resolve_fn_signature(
+            "some_fn",
+            &custom_struct.applications,
+            &custom_struct.lookup(),
+        )?;
 
         // then
         assert_eq!(signature, "some_fn(s<u8>(u8))");
@@ -440,91 +259,17 @@ mod tests {
         Ok(())
     }
 
-    struct CustomType {
-        decl: Vec<TypeDeclaration>,
-        application: Vec<TypeApplication>,
-    }
-
-    impl CustomType {
-        fn new_struct(name: &str) -> Self {
-            let declarations = vec![
-                TypeDeclaration {
-                    type_id: 1,
-                    type_field: "u8".to_string(),
-                    components: None,
-                    type_parameters: None,
-                },
-                TypeDeclaration {
-                    type_id: 2,
-                    type_field: format!("struct {name}"),
-                    components: Some(vec![TypeApplication {
-                        name: "_0".to_string(),
-                        type_id: 1,
-                        type_arguments: None,
-                    }]),
-                    type_parameters: None,
-                },
-            ];
-
-            let type_application = TypeApplication {
-                name: "arg".to_string(),
-                type_id: 2,
-                type_arguments: Some(vec![TypeApplication {
-                    name: "".to_string(),
-                    type_id: 3,
-                    type_arguments: None,
-                }]),
-            };
-
-            Self {
-                decl: declarations,
-                application: vec![type_application],
-            }
-        }
-
-        fn lookup(&self) -> HashMap<usize, TypeDeclaration> {
-            self.decl
-                .iter()
-                .map(|decl| (decl.type_id, decl.clone()))
-                .collect()
-        }
-    }
-
     #[test]
     fn handles_enums() -> Result<()> {
         // given
-        let declarations = [
-            TypeDeclaration {
-                type_id: 1,
-                type_field: "u8".to_string(),
-                components: None,
-                type_parameters: None,
-            },
-            TypeDeclaration {
-                type_id: 2,
-                type_field: "enum SomeEnum".to_string(),
-                components: Some(vec![TypeApplication {
-                    name: "field".to_string(),
-                    type_id: 1,
-                    type_arguments: None,
-                }]),
-                type_parameters: None,
-            },
-        ];
-
-        let type_application = TypeApplication {
-            name: "arg".to_string(),
-            type_id: 2,
-            type_arguments: None,
-        };
-
-        let type_lookup = declarations
-            .into_iter()
-            .map(|decl| (decl.type_id, decl))
-            .collect::<HashMap<_, _>>();
+        let enum_custom_type = AbiStubs::new_enum(false);
 
         // when
-        let signature = resolve_fn_signature("some_fn", &[type_application], &type_lookup)?;
+        let signature = resolve_fn_signature(
+            "some_fn",
+            &enum_custom_type.applications,
+            &enum_custom_type.lookup(),
+        )?;
 
         // then
         assert_eq!(signature, "some_fn(e(u8))");
@@ -535,48 +280,11 @@ mod tests {
     #[test]
     fn handles_generic_enums() -> Result<()> {
         // given
-        let declarations = [
-            TypeDeclaration {
-                type_id: 1,
-                type_field: "generic T".to_string(),
-                components: None,
-                type_parameters: None,
-            },
-            TypeDeclaration {
-                type_id: 2,
-                type_field: "enum SomeEnum".to_string(),
-                components: Some(vec![TypeApplication {
-                    name: "field".to_string(),
-                    type_id: 1,
-                    type_arguments: None,
-                }]),
-                type_parameters: Some(vec![1]),
-            },
-            TypeDeclaration {
-                type_id: 3,
-                type_field: "u8".to_string(),
-                components: None,
-                type_parameters: None,
-            },
-        ];
-
-        let type_application = TypeApplication {
-            name: "arg".to_string(),
-            type_id: 2,
-            type_arguments: Some(vec![TypeApplication {
-                name: "".to_string(),
-                type_id: 3,
-                type_arguments: None,
-            }]),
-        };
-
-        let type_lookup = declarations
-            .into_iter()
-            .map(|decl| (decl.type_id, decl))
-            .collect::<HashMap<_, _>>();
+        let custom_enum = AbiStubs::new_enum(true);
 
         // when
-        let signature = resolve_fn_signature("some_fn", &[type_application], &type_lookup)?;
+        let signature =
+            resolve_fn_signature("some_fn", &custom_enum.applications, &custom_enum.lookup())?;
 
         // then
         assert_eq!(signature, "some_fn(e<u8>(u8))");
@@ -584,577 +292,598 @@ mod tests {
         Ok(())
     }
 
-    // #[test]
-    // fn handles_tuples() -> Result<()> {
-    //     // given
-    //     let declarations = [
-    //         TypeDeclaration {
-    //             type_id: 1,
-    //             type_field: "(_, _)".to_string(),
-    //             components: Some(vec![
-    //                 TypeApplication {
-    //                     name: "__tuple_element".to_string(),
-    //                     type_id: 3,
-    //                     type_arguments: None,
-    //                 },
-    //                 TypeApplication {
-    //                     name: "__tuple_element".to_string(),
-    //                     type_id: 2,
-    //                     type_arguments: None,
-    //                 },
-    //             ]),
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 2,
-    //             type_field: "str[15]".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 3,
-    //             type_field: "u8".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //     ];
+    #[test]
+    fn handles_tuples() {
+        let tuple = AbiStubs::new_tuple();
 
-    //     let type_application = TypeApplication {
-    //         name: "arg".to_string(),
-    //         type_id: 1,
-    //         type_arguments: None,
-    //     };
-    //     let type_lookup = declarations
-    //         .into_iter()
-    //         .map(|decl| (decl.type_id, decl))
-    //         .collect::<HashMap<_, _>>();
+        let signature =
+            resolve_fn_signature("some_fn", &tuple.applications, &tuple.lookup()).unwrap();
 
-    //     // when
-    //     let result = ParamType::try_from_type_application(&type_application, &type_lookup)?;
+        assert_eq!(signature, "some_fn((u8,str[15]))")
+    }
 
-    //     // then
-    //     assert_eq!(
-    //         result,
-    //         ParamType::Tuple(vec![ParamType::U8, ParamType::String(15)])
-    //     );
+    #[test]
+    fn handles_mega_case() {
+        let mega_case = AbiStubs::new_mega_case();
 
-    //     Ok(())
-    // }
+        let signature =
+            resolve_fn_signature("complex_test", &mega_case.applications, &mega_case.lookup())
+                .unwrap();
 
-    // #[test]
-    // fn ultimate_example() -> Result<()> {
-    //     // given
-    //     let declarations = [
-    //         TypeDeclaration {
-    //             type_id: 1,
-    //             type_field: "(_, _)".to_string(),
-    //             components: Some(vec![
-    //                 TypeApplication {
-    //                     name: "__tuple_element".to_string(),
-    //                     type_id: 11,
-    //                     type_arguments: None,
-    //                 },
-    //                 TypeApplication {
-    //                     name: "__tuple_element".to_string(),
-    //                     type_id: 11,
-    //                     type_arguments: None,
-    //                 },
-    //             ]),
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 2,
-    //             type_field: "(_, _)".to_string(),
-    //             components: Some(vec![
-    //                 TypeApplication {
-    //                     name: "__tuple_element".to_string(),
-    //                     type_id: 4,
-    //                     type_arguments: None,
-    //                 },
-    //                 TypeApplication {
-    //                     name: "__tuple_element".to_string(),
-    //                     type_id: 24,
-    //                     type_arguments: None,
-    //                 },
-    //             ]),
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 3,
-    //             type_field: "(_, _)".to_string(),
-    //             components: Some(vec![
-    //                 TypeApplication {
-    //                     name: "__tuple_element".to_string(),
-    //                     type_id: 5,
-    //                     type_arguments: None,
-    //                 },
-    //                 TypeApplication {
-    //                     name: "__tuple_element".to_string(),
-    //                     type_id: 13,
-    //                     type_arguments: None,
-    //                 },
-    //             ]),
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 4,
-    //             type_field: "[_; 1]".to_string(),
-    //             components: Some(vec![TypeApplication {
-    //                 name: "__array_element".to_string(),
-    //                 type_id: 8,
-    //                 type_arguments: Some(vec![TypeApplication {
-    //                     name: "".to_string(),
-    //                     type_id: 22,
-    //                     type_arguments: Some(vec![TypeApplication {
-    //                         name: "".to_string(),
-    //                         type_id: 21,
-    //                         type_arguments: Some(vec![TypeApplication {
-    //                             name: "".to_string(),
-    //                             type_id: 18,
-    //                             type_arguments: Some(vec![TypeApplication {
-    //                                 name: "".to_string(),
-    //                                 type_id: 13,
-    //                                 type_arguments: None,
-    //                             }]),
-    //                         }]),
-    //                     }]),
-    //                 }]),
-    //             }]),
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 5,
-    //             type_field: "[_; 2]".to_string(),
-    //             components: Some(vec![TypeApplication {
-    //                 name: "__array_element".to_string(),
-    //                 type_id: 14,
-    //                 type_arguments: None,
-    //             }]),
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 6,
-    //             type_field: "[_; 2]".to_string(),
-    //             components: Some(vec![TypeApplication {
-    //                 name: "__array_element".to_string(),
-    //                 type_id: 10,
-    //                 type_arguments: None,
-    //             }]),
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 7,
-    //             type_field: "b256".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 8,
-    //             type_field: "enum EnumWGeneric".to_string(),
-    //             components: Some(vec![
-    //                 TypeApplication {
-    //                     name: "a".to_string(),
-    //                     type_id: 25,
-    //                     type_arguments: None,
-    //                 },
-    //                 TypeApplication {
-    //                     name: "b".to_string(),
-    //                     type_id: 12,
-    //                     type_arguments: None,
-    //                 },
-    //             ]),
-    //             type_parameters: Some(vec![12]),
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 9,
-    //             type_field: "generic K".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 10,
-    //             type_field: "generic L".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 11,
-    //             type_field: "generic M".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 12,
-    //             type_field: "generic N".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 13,
-    //             type_field: "generic T".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 14,
-    //             type_field: "generic U".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 15,
-    //             type_field: "raw untyped ptr".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 16,
-    //             type_field: "str[2]".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 17,
-    //             type_field: "struct MegaExample".to_string(),
-    //             components: Some(vec![
-    //                 TypeApplication {
-    //                     name: "a".to_string(),
-    //                     type_id: 3,
-    //                     type_arguments: None,
-    //                 },
-    //                 TypeApplication {
-    //                     name: "b".to_string(),
-    //                     type_id: 23,
-    //                     type_arguments: Some(vec![TypeApplication {
-    //                         name: "".to_string(),
-    //                         type_id: 2,
-    //                         type_arguments: None,
-    //                     }]),
-    //                 },
-    //             ]),
-    //             type_parameters: Some(vec![13, 14]),
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 18,
-    //             type_field: "struct PassTheGenericOn".to_string(),
-    //             components: Some(vec![TypeApplication {
-    //                 name: "one".to_string(),
-    //                 type_id: 20,
-    //                 type_arguments: Some(vec![TypeApplication {
-    //                     name: "".to_string(),
-    //                     type_id: 9,
-    //                     type_arguments: None,
-    //                 }]),
-    //             }]),
-    //             type_parameters: Some(vec![9]),
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 19,
-    //             type_field: "struct std::vec::RawVec".to_string(),
-    //             components: Some(vec![
-    //                 TypeApplication {
-    //                     name: "ptr".to_string(),
-    //                     type_id: 15,
-    //                     type_arguments: None,
-    //                 },
-    //                 TypeApplication {
-    //                     name: "cap".to_string(),
-    //                     type_id: 25,
-    //                     type_arguments: None,
-    //                 },
-    //             ]),
-    //             type_parameters: Some(vec![13]),
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 20,
-    //             type_field: "struct SimpleGeneric".to_string(),
-    //             components: Some(vec![TypeApplication {
-    //                 name: "single_generic_param".to_string(),
-    //                 type_id: 13,
-    //                 type_arguments: None,
-    //             }]),
-    //             type_parameters: Some(vec![13]),
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 21,
-    //             type_field: "struct StructWArrayGeneric".to_string(),
-    //             components: Some(vec![TypeApplication {
-    //                 name: "a".to_string(),
-    //                 type_id: 6,
-    //                 type_arguments: None,
-    //             }]),
-    //             type_parameters: Some(vec![10]),
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 22,
-    //             type_field: "struct StructWTupleGeneric".to_string(),
-    //             components: Some(vec![TypeApplication {
-    //                 name: "a".to_string(),
-    //                 type_id: 1,
-    //                 type_arguments: None,
-    //             }]),
-    //             type_parameters: Some(vec![11]),
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 23,
-    //             type_field: "struct std::vec::Vec".to_string(),
-    //             components: Some(vec![
-    //                 TypeApplication {
-    //                     name: "buf".to_string(),
-    //                     type_id: 19,
-    //                     type_arguments: Some(vec![TypeApplication {
-    //                         name: "".to_string(),
-    //                         type_id: 13,
-    //                         type_arguments: None,
-    //                     }]),
-    //                 },
-    //                 TypeApplication {
-    //                     name: "len".to_string(),
-    //                     type_id: 25,
-    //                     type_arguments: None,
-    //                 },
-    //             ]),
-    //             type_parameters: Some(vec![13]),
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 24,
-    //             type_field: "u32".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //         TypeDeclaration {
-    //             type_id: 25,
-    //             type_field: "u64".to_string(),
-    //             components: None,
-    //             type_parameters: None,
-    //         },
-    //     ];
+        let expected_signature = "complex_test(s<str[2],b256>((a[b256;2],str[2]),s<(a[e<s<s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2])>((s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2]),s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2])))>(u64,s<s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2])>((s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2]),s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2]))));1],u32)>(s<(a[e<s<s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2])>((s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2]),s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2])))>(u64,s<s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2])>((s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2]),s<s<str[2]>(s<str[2]>(str[2]))>(a[s<str[2]>(s<str[2]>(str[2]));2]))));1],u32)>(rawptr,u64),u64)))";
 
-    //     let type_lookup = declarations
-    //         .into_iter()
-    //         .map(|decl| (decl.type_id, decl))
-    //         .collect::<HashMap<_, _>>();
+        assert_eq!(signature, expected_signature);
+    }
 
-    //     let type_application = TypeApplication {
-    //         name: "arg1".to_string(),
-    //         type_id: 17,
-    //         type_arguments: Some(vec![
-    //             TypeApplication {
-    //                 name: "".to_string(),
-    //                 type_id: 16,
-    //                 type_arguments: None,
-    //             },
-    //             TypeApplication {
-    //                 name: "".to_string(),
-    //                 type_id: 7,
-    //                 type_arguments: None,
-    //             },
-    //         ]),
-    //     };
+    struct AbiStubs {
+        declarations: Vec<TypeDeclaration>,
+        applications: Vec<TypeApplication>,
+    }
 
-    //     // when
-    //     let result = ParamType::try_from_type_application(&type_application, &type_lookup)?;
+    impl AbiStubs {
+        fn new_struct(use_generics: bool) -> Self {
+            let (declarations, custom_type_id) =
+                Self::declarations_for_custom_type("struct SomeStruct".to_string(), use_generics);
 
-    //     // then
-    //     let expected_param_type = {
-    //         let fields = vec![ParamType::Struct {
-    //             fields: vec![ParamType::String(2)],
-    //             generics: vec![ParamType::String(2)],
-    //         }];
-    //         let pass_the_generic_on = ParamType::Struct {
-    //             fields,
-    //             generics: vec![ParamType::String(2)],
-    //         };
+            let type_application = Self::arg_for_type_id(custom_type_id, use_generics);
 
-    //         let fields = vec![ParamType::Array(Box::from(pass_the_generic_on.clone()), 2)];
-    //         let struct_w_array_generic = ParamType::Struct {
-    //             fields,
-    //             generics: vec![pass_the_generic_on],
-    //         };
+            Self {
+                declarations,
+                applications: vec![type_application],
+            }
+        }
 
-    //         let fields = vec![ParamType::Tuple(vec![
-    //             struct_w_array_generic.clone(),
-    //             struct_w_array_generic.clone(),
-    //         ])];
-    //         let struct_w_tuple_generic = ParamType::Struct {
-    //             fields,
-    //             generics: vec![struct_w_array_generic],
-    //         };
+        fn new_enum(use_generics: bool) -> Self {
+            let (declarations, custom_type_id) =
+                Self::declarations_for_custom_type("enum SomeEnum".to_string(), use_generics);
 
-    //         let types = vec![ParamType::U64, struct_w_tuple_generic.clone()];
-    //         let fields = vec![
-    //             ParamType::Tuple(vec![
-    //                 ParamType::Array(Box::from(ParamType::B256), 2),
-    //                 ParamType::String(2),
-    //             ]),
-    //             ParamType::Vector(Box::from(ParamType::Tuple(vec![
-    //                 ParamType::Array(
-    //                     Box::from(ParamType::Enum {
-    //                         variants: EnumVariants::new(types).unwrap(),
-    //                         generics: vec![struct_w_tuple_generic],
-    //                     }),
-    //                     1,
-    //                 ),
-    //                 ParamType::U32,
-    //             ]))),
-    //         ];
-    //         ParamType::Struct {
-    //             fields,
-    //             generics: vec![ParamType::String(2), ParamType::B256],
-    //         }
-    //     };
+            let type_application = Self::arg_for_type_id(custom_type_id, use_generics);
 
-    //     assert_eq!(result, expected_param_type);
+            Self {
+                declarations,
+                applications: vec![type_application],
+            }
+        }
 
-    //     Ok(())
-    // }
-    // #[test]
-    // fn contains_nested_heap_types_false_on_simple_types() -> Result<()> {
-    //     // Simple types cannot have nested heap types
-    //     assert!(!ParamType::Unit.contains_nested_heap_types());
-    //     assert!(!ParamType::U8.contains_nested_heap_types());
-    //     assert!(!ParamType::U16.contains_nested_heap_types());
-    //     assert!(!ParamType::U32.contains_nested_heap_types());
-    //     assert!(!ParamType::U64.contains_nested_heap_types());
-    //     assert!(!ParamType::Bool.contains_nested_heap_types());
-    //     assert!(!ParamType::B256.contains_nested_heap_types());
-    //     assert!(!ParamType::String(10).contains_nested_heap_types());
-    //     assert!(!ParamType::RawSlice.contains_nested_heap_types());
-    //     assert!(!ParamType::Bytes.contains_nested_heap_types());
-    //     Ok(())
-    // }
-    //
-    // #[test]
-    // fn test_complex_types_for_nested_heap_types_containing_vectors() -> Result<()> {
-    //     let base_vector = ParamType::Vector(Box::from(ParamType::U8));
-    //     let param_types_no_nested_vec = vec![ParamType::U64, ParamType::U32];
-    //     let param_types_nested_vec = vec![ParamType::Unit, ParamType::Bool, base_vector.clone()];
-    //
-    //     let is_nested = |param_type: ParamType| assert!(param_type.contains_nested_heap_types());
-    //     let not_nested = |param_type: ParamType| assert!(!param_type.contains_nested_heap_types());
-    //
-    //     not_nested(base_vector.clone());
-    //     is_nested(ParamType::Vector(Box::from(base_vector.clone())));
-    //
-    //     not_nested(ParamType::Array(Box::from(ParamType::U8), 10));
-    //     is_nested(ParamType::Array(Box::from(base_vector), 10));
-    //
-    //     not_nested(ParamType::Tuple(param_types_no_nested_vec.clone()));
-    //     is_nested(ParamType::Tuple(param_types_nested_vec.clone()));
-    //
-    //     not_nested(ParamType::Struct {
-    //         generics: param_types_no_nested_vec.clone(),
-    //         fields: param_types_no_nested_vec.clone(),
-    //     });
-    //     is_nested(ParamType::Struct {
-    //         generics: param_types_nested_vec.clone(),
-    //         fields: param_types_no_nested_vec.clone(),
-    //     });
-    //     is_nested(ParamType::Struct {
-    //         generics: param_types_no_nested_vec.clone(),
-    //         fields: param_types_nested_vec.clone(),
-    //     });
-    //
-    //     not_nested(ParamType::Enum {
-    //         variants: EnumVariants::new(param_types_no_nested_vec.clone())?,
-    //         generics: param_types_no_nested_vec.clone(),
-    //     });
-    //     is_nested(ParamType::Enum {
-    //         variants: EnumVariants::new(param_types_nested_vec.clone())?,
-    //         generics: param_types_no_nested_vec.clone(),
-    //     });
-    //     is_nested(ParamType::Enum {
-    //         variants: EnumVariants::new(param_types_no_nested_vec)?,
-    //         generics: param_types_nested_vec,
-    //     });
-    //     Ok(())
-    // }
-    //
-    // #[test]
-    // fn test_complex_types_for_nested_heap_types_containing_bytes() -> Result<()> {
-    //     let base_bytes = ParamType::Bytes;
-    //     let param_types_no_nested_bytes = vec![ParamType::U64, ParamType::U32];
-    //     let param_types_nested_bytes = vec![ParamType::Unit, ParamType::Bool, base_bytes.clone()];
-    //
-    //     let is_nested = |param_type: ParamType| assert!(param_type.contains_nested_heap_types());
-    //     let not_nested = |param_type: ParamType| assert!(!param_type.contains_nested_heap_types());
-    //
-    //     not_nested(base_bytes.clone());
-    //     is_nested(ParamType::Vector(Box::from(base_bytes.clone())));
-    //
-    //     not_nested(ParamType::Array(Box::from(ParamType::U8), 10));
-    //     is_nested(ParamType::Array(Box::from(base_bytes), 10));
-    //
-    //     not_nested(ParamType::Tuple(param_types_no_nested_bytes.clone()));
-    //     is_nested(ParamType::Tuple(param_types_nested_bytes.clone()));
-    //
-    //     let not_nested_struct = ParamType::Struct {
-    //         generics: param_types_no_nested_bytes.clone(),
-    //         fields: param_types_no_nested_bytes.clone(),
-    //     };
-    //     not_nested(not_nested_struct);
-    //
-    //     let nested_struct = ParamType::Struct {
-    //         generics: param_types_nested_bytes.clone(),
-    //         fields: param_types_no_nested_bytes.clone(),
-    //     };
-    //     is_nested(nested_struct);
-    //
-    //     let nested_struct = ParamType::Struct {
-    //         generics: param_types_no_nested_bytes.clone(),
-    //         fields: param_types_nested_bytes.clone(),
-    //     };
-    //     is_nested(nested_struct);
-    //
-    //     let not_nested_enum = ParamType::Enum {
-    //         variants: EnumVariants::new(param_types_no_nested_bytes.clone())?,
-    //         generics: param_types_no_nested_bytes.clone(),
-    //     };
-    //     not_nested(not_nested_enum);
-    //
-    //     let nested_enum = ParamType::Enum {
-    //         variants: EnumVariants::new(param_types_nested_bytes.clone())?,
-    //         generics: param_types_no_nested_bytes.clone(),
-    //     };
-    //     is_nested(nested_enum);
-    //
-    //     let nested_enum = ParamType::Enum {
-    //         variants: EnumVariants::new(param_types_no_nested_bytes)?,
-    //         generics: param_types_nested_bytes,
-    //     };
-    //     is_nested(nested_enum);
-    //
-    //     Ok(())
-    // }
-    //
-    // #[test]
-    // fn try_vector_is_type_path_backward_compatible() {
-    //     // TODO: To be removed once https://github.com/FuelLabs/fuels-rs/issues/881 is unblocked.
-    //     let the_type = given_vec_type_w_path("Vec");
-    //
-    //     let param_type = try_vector(&the_type).unwrap().unwrap();
-    //
-    //     assert_eq!(param_type, ParamType::Vector(Box::new(ParamType::U8)));
-    // }
-    //
-    // #[test]
-    // fn try_vector_correctly_resolves_param_type() {
-    //     let the_type = given_vec_type_w_path("std::vec::Vec");
-    //
-    //     let param_type = try_vector(&the_type).unwrap().unwrap();
-    //
-    //     assert_eq!(param_type, ParamType::Vector(Box::new(ParamType::U8)));
-    // }
-    //
-    // fn given_vec_type_w_path(path: &str) -> Type {
-    //     Type {
-    //         type_field: format!("struct {path}"),
-    //         generic_params: vec![Type {
-    //             type_field: "u8".to_string(),
-    //             generic_params: vec![],
-    //             components: vec![],
-    //         }],
-    //         components: vec![],
-    //     }
-    // }
+        fn new_raw_ptr() -> Self {
+            let declarations = vec![TypeDeclaration {
+                type_id: 1,
+                type_field: "raw untyped ptr".to_string(),
+                components: None,
+                type_parameters: None,
+            }];
+
+            let application = TypeApplication {
+                name: "arg".to_string(),
+                type_id: 1,
+                type_arguments: None,
+            };
+
+            Self {
+                declarations,
+                applications: vec![application],
+            }
+        }
+
+        fn new_raw_slice() -> Self {
+            let declarations = vec![TypeDeclaration {
+                type_id: 1,
+                type_field: "raw untyped slice".to_string(),
+                components: None,
+                type_parameters: None,
+            }];
+
+            let application = TypeApplication {
+                name: "arg".to_string(),
+                type_id: 1,
+                type_arguments: None,
+            };
+
+            Self {
+                declarations,
+                applications: vec![application],
+            }
+        }
+
+        fn new_vector() -> Self {
+            // given
+            let declarations = vec![
+                TypeDeclaration {
+                    type_id: 1,
+                    type_field: "generic T".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 2,
+                    type_field: "raw untyped ptr".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 3,
+                    type_field: "struct std::vec::RawVec".to_string(),
+                    components: Some(vec![
+                        TypeApplication {
+                            name: "ptr".to_string(),
+                            type_id: 2,
+                            type_arguments: None,
+                        },
+                        TypeApplication {
+                            name: "cap".to_string(),
+                            type_id: 5,
+                            type_arguments: None,
+                        },
+                    ]),
+                    type_parameters: Some(vec![1]),
+                },
+                TypeDeclaration {
+                    type_id: 4,
+                    type_field: "struct std::vec::Vec".to_string(),
+                    components: Some(vec![
+                        TypeApplication {
+                            name: "buf".to_string(),
+                            type_id: 3,
+                            type_arguments: Some(vec![TypeApplication {
+                                name: "".to_string(),
+                                type_id: 1,
+                                type_arguments: None,
+                            }]),
+                        },
+                        TypeApplication {
+                            name: "len".to_string(),
+                            type_id: 5,
+                            type_arguments: None,
+                        },
+                    ]),
+                    type_parameters: Some(vec![1]),
+                },
+                TypeDeclaration {
+                    type_id: 5,
+                    type_field: "u64".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 6,
+                    type_field: "u8".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+            ];
+
+            let application = TypeApplication {
+                name: "arg".to_string(),
+                type_id: 4,
+                type_arguments: Some(vec![TypeApplication {
+                    name: "".to_string(),
+                    type_id: 6,
+                    type_arguments: None,
+                }]),
+            };
+
+            Self {
+                declarations,
+                applications: vec![application],
+            }
+        }
+
+        fn new_tuple() -> Self {
+            let declarations = vec![
+                TypeDeclaration {
+                    type_id: 1,
+                    type_field: "(_, _)".to_string(),
+                    components: Some(vec![
+                        TypeApplication {
+                            name: "__tuple_element".to_string(),
+                            type_id: 3,
+                            type_arguments: None,
+                        },
+                        TypeApplication {
+                            name: "__tuple_element".to_string(),
+                            type_id: 2,
+                            type_arguments: None,
+                        },
+                    ]),
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 2,
+                    type_field: "str[15]".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 3,
+                    type_field: "u8".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+            ];
+
+            let application = TypeApplication {
+                name: "arg".to_string(),
+                type_id: 1,
+                type_arguments: None,
+            };
+
+            Self {
+                declarations,
+                applications: vec![application],
+            }
+        }
+
+        fn new_mega_case() -> Self {
+            let declarations = vec![
+                TypeDeclaration {
+                    type_id: 0,
+                    type_field: "()".to_string(),
+                    components: Some(vec![]),
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 1,
+                    type_field: "(_, _)".to_string(),
+                    components: Some(vec![
+                        TypeApplication {
+                            name: "__tuple_element".to_string(),
+                            type_id: 11,
+                            type_arguments: None,
+                        },
+                        TypeApplication {
+                            name: "__tuple_element".to_string(),
+                            type_id: 11,
+                            type_arguments: None,
+                        },
+                    ]),
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 2,
+                    type_field: "(_, _)".to_string(),
+                    components: Some(vec![
+                        TypeApplication {
+                            name: "__tuple_element".to_string(),
+                            type_id: 4,
+                            type_arguments: None,
+                        },
+                        TypeApplication {
+                            name: "__tuple_element".to_string(),
+                            type_id: 24,
+                            type_arguments: None,
+                        },
+                    ]),
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 3,
+                    type_field: "(_, _)".to_string(),
+                    components: Some(vec![
+                        TypeApplication {
+                            name: "__tuple_element".to_string(),
+                            type_id: 5,
+                            type_arguments: None,
+                        },
+                        TypeApplication {
+                            name: "__tuple_element".to_string(),
+                            type_id: 13,
+                            type_arguments: None,
+                        },
+                    ]),
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 4,
+                    type_field: "[_; 1]".to_string(),
+                    components: Some(vec![TypeApplication {
+                        name: "__array_element".to_string(),
+                        type_id: 8,
+                        type_arguments: Some(vec![TypeApplication {
+                            name: "".to_string(),
+                            type_id: 22,
+                            type_arguments: Some(vec![TypeApplication {
+                                name: "".to_string(),
+                                type_id: 21,
+                                type_arguments: Some(vec![TypeApplication {
+                                    name: "".to_string(),
+                                    type_id: 18,
+                                    type_arguments: Some(vec![TypeApplication {
+                                        name: "".to_string(),
+                                        type_id: 13,
+                                        type_arguments: None,
+                                    }]),
+                                }]),
+                            }]),
+                        }]),
+                    }]),
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 5,
+                    type_field: "[_; 2]".to_string(),
+                    components: Some(vec![TypeApplication {
+                        name: "__array_element".to_string(),
+                        type_id: 14,
+                        type_arguments: None,
+                    }]),
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 6,
+                    type_field: "[_; 2]".to_string(),
+                    components: Some(vec![TypeApplication {
+                        name: "__array_element".to_string(),
+                        type_id: 10,
+                        type_arguments: None,
+                    }]),
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 7,
+                    type_field: "b256".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 8,
+                    type_field: "enum EnumWGeneric".to_string(),
+                    components: Some(vec![
+                        TypeApplication {
+                            name: "a".to_string(),
+                            type_id: 25,
+                            type_arguments: None,
+                        },
+                        TypeApplication {
+                            name: "b".to_string(),
+                            type_id: 12,
+                            type_arguments: None,
+                        },
+                    ]),
+                    type_parameters: Some(vec![12]),
+                },
+                TypeDeclaration {
+                    type_id: 9,
+                    type_field: "generic K".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 10,
+                    type_field: "generic L".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 11,
+                    type_field: "generic M".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 12,
+                    type_field: "generic N".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 13,
+                    type_field: "generic T".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 14,
+                    type_field: "generic U".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 15,
+                    type_field: "raw untyped ptr".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 16,
+                    type_field: "str[2]".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 17,
+                    type_field: "struct MegaExample".to_string(),
+                    components: Some(vec![
+                        TypeApplication {
+                            name: "a".to_string(),
+                            type_id: 3,
+                            type_arguments: None,
+                        },
+                        TypeApplication {
+                            name: "b".to_string(),
+                            type_id: 23,
+                            type_arguments: Some(vec![TypeApplication {
+                                name: "".to_string(),
+                                type_id: 2,
+                                type_arguments: None,
+                            }]),
+                        },
+                    ]),
+                    type_parameters: Some(vec![13, 14]),
+                },
+                TypeDeclaration {
+                    type_id: 18,
+                    type_field: "struct PassTheGenericOn".to_string(),
+                    components: Some(vec![TypeApplication {
+                        name: "one".to_string(),
+                        type_id: 20,
+                        type_arguments: Some(vec![TypeApplication {
+                            name: "".to_string(),
+                            type_id: 9,
+                            type_arguments: None,
+                        }]),
+                    }]),
+                    type_parameters: Some(vec![9]),
+                },
+                TypeDeclaration {
+                    type_id: 19,
+                    type_field: "struct RawVec".to_string(),
+                    components: Some(vec![
+                        TypeApplication {
+                            name: "ptr".to_string(),
+                            type_id: 15,
+                            type_arguments: None,
+                        },
+                        TypeApplication {
+                            name: "cap".to_string(),
+                            type_id: 25,
+                            type_arguments: None,
+                        },
+                    ]),
+                    type_parameters: Some(vec![13]),
+                },
+                TypeDeclaration {
+                    type_id: 20,
+                    type_field: "struct SimpleGeneric".to_string(),
+                    components: Some(vec![TypeApplication {
+                        name: "single_generic_param".to_string(),
+                        type_id: 13,
+                        type_arguments: None,
+                    }]),
+                    type_parameters: Some(vec![13]),
+                },
+                TypeDeclaration {
+                    type_id: 21,
+                    type_field: "struct StructWArrayGeneric".to_string(),
+                    components: Some(vec![TypeApplication {
+                        name: "a".to_string(),
+                        type_id: 6,
+                        type_arguments: None,
+                    }]),
+                    type_parameters: Some(vec![10]),
+                },
+                TypeDeclaration {
+                    type_id: 22,
+                    type_field: "struct StructWTupleGeneric".to_string(),
+                    components: Some(vec![TypeApplication {
+                        name: "a".to_string(),
+                        type_id: 1,
+                        type_arguments: None,
+                    }]),
+                    type_parameters: Some(vec![11]),
+                },
+                TypeDeclaration {
+                    type_id: 23,
+                    type_field: "struct Vec".to_string(),
+                    components: Some(vec![
+                        TypeApplication {
+                            name: "buf".to_string(),
+                            type_id: 19,
+                            type_arguments: Some(vec![TypeApplication {
+                                name: "".to_string(),
+                                type_id: 13,
+                                type_arguments: None,
+                            }]),
+                        },
+                        TypeApplication {
+                            name: "len".to_string(),
+                            type_id: 25,
+                            type_arguments: None,
+                        },
+                    ]),
+                    type_parameters: Some(vec![13]),
+                },
+                TypeDeclaration {
+                    type_id: 24,
+                    type_field: "u32".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: 25,
+                    type_field: "u64".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+            ];
+
+            let applications = vec![TypeApplication {
+                name: "arg1".to_string(),
+                type_id: 17,
+                type_arguments: Some(vec![
+                    TypeApplication {
+                        name: "".to_string(),
+                        type_id: 16,
+                        type_arguments: None,
+                    },
+                    TypeApplication {
+                        name: "".to_string(),
+                        type_id: 7,
+                        type_arguments: None,
+                    },
+                ]),
+            }];
+
+            Self {
+                declarations,
+                applications,
+            }
+        }
+
+        fn lookup(&self) -> HashMap<usize, TypeDeclaration> {
+            self.declarations
+                .iter()
+                .map(|decl| (decl.type_id, decl.clone()))
+                .collect()
+        }
+
+        fn declarations_for_custom_type(
+            type_field: String,
+            use_generics: bool,
+        ) -> (Vec<TypeDeclaration>, usize) {
+            let custom_type_id = 2;
+            let inner_type_id = if use_generics { 3 } else { 1 };
+
+            let mut declarations = vec![
+                TypeDeclaration {
+                    type_id: 1,
+                    type_field: "u8".to_string(),
+                    components: None,
+                    type_parameters: None,
+                },
+                TypeDeclaration {
+                    type_id: custom_type_id,
+                    type_field,
+                    components: Some(vec![TypeApplication {
+                        name: "_0".to_string(),
+                        type_id: inner_type_id,
+                        type_arguments: None,
+                    }]),
+                    type_parameters: use_generics.then_some(vec![inner_type_id]),
+                },
+            ];
+
+            if use_generics {
+                declarations.push(TypeDeclaration {
+                    type_id: 3,
+                    type_field: "generic T".to_string(),
+                    components: None,
+                    type_parameters: None,
+                })
+            }
+
+            (declarations, custom_type_id)
+        }
+
+        fn arg_for_type_id(custom_type_id: usize, use_generics: bool) -> TypeApplication {
+            TypeApplication {
+                name: "arg".to_string(),
+                type_id: custom_type_id,
+                type_arguments: use_generics.then_some(vec![TypeApplication {
+                    name: "".to_string(),
+                    type_id: 1,
+                    type_arguments: None,
+                }]),
+            }
+        }
+    }
 }
