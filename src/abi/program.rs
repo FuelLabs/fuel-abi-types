@@ -10,11 +10,40 @@ use serde::{Deserialize, Serialize};
 #[derive(Default, Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProgramABI {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding: Option<Version>,
     pub types: Vec<TypeDeclaration>,
     pub functions: Vec<ABIFunction>,
     pub logged_types: Option<Vec<LoggedType>>,
     pub messages_types: Option<Vec<MessageType>>,
     pub configurables: Option<Vec<Configurable>>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Version(pub String);
+
+impl From<&str> for Version {
+    fn from(value: &str) -> Self {
+        Version(value.into())
+    }
+}
+
+impl Version {
+    pub fn major(&self) -> Option<&str> {
+        let s = self.0.split('.').next().map(|x| x.trim());
+        match s {
+            Some("") => None,
+            s => s,
+        }
+    }
+
+    pub fn minor(&self) -> Option<&str> {
+        let s = self.0.split('.').nth(1).map(|x| x.trim());
+        match s {
+            Some("") => None,
+            s => s,
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -84,4 +113,19 @@ pub struct Configurable {
 pub struct Attribute {
     pub name: String,
     pub arguments: Vec<String>,
+}
+
+#[test]
+fn version_extraction_test() {
+    let v = Version("1.2".to_string());
+    assert_eq!(v.major(), Some("1"));
+    assert_eq!(v.minor(), Some("2"));
+
+    let v = Version("1".to_string());
+    assert_eq!(v.major(), Some("1"));
+    assert_eq!(v.minor(), None);
+
+    let v = Version("".to_string());
+    assert_eq!(v.major(), None);
+    assert_eq!(v.minor(), None);
 }
