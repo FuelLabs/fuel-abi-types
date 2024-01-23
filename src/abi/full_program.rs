@@ -13,6 +13,8 @@ use crate::{
     utils::TypePath,
 };
 
+use super::program::Version;
+
 /// 'Full' versions of the ABI structures are needed to simplify duplicate
 /// detection later on. The original ones([`ProgramABI`], [`TypeApplication`],
 /// [`TypeDeclaration`] and others) are not suited for this due to their use of
@@ -20,6 +22,7 @@ use crate::{
 /// represent is virtually the same.
 #[derive(Debug, Clone)]
 pub struct FullProgramABI {
+    pub encoding: Option<Version>,
     pub types: Vec<FullTypeDeclaration>,
     pub functions: Vec<FullABIFunction>,
     pub logged_types: Vec<FullLoggedType>,
@@ -66,6 +69,7 @@ impl FullProgramABI {
             .collect();
 
         Ok(Self {
+            encoding: program_abi.encoding.clone(),
             types,
             functions,
             logged_types,
