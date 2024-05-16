@@ -221,7 +221,7 @@ impl FullTypeApplication {
 
 #[derive(Debug, Clone)]
 pub struct FullLoggedType {
-    pub log_id: u64,
+    pub log_id: String,
     pub application: FullTypeApplication,
 }
 
@@ -231,7 +231,7 @@ impl FullLoggedType {
         types: &HashMap<usize, TypeDeclaration>,
     ) -> FullLoggedType {
         FullLoggedType {
-            log_id: logged_type.log_id,
+            log_id: logged_type.log_id.clone(),
             application: FullTypeApplication::from_counterpart(&logged_type.application, types),
         }
     }
