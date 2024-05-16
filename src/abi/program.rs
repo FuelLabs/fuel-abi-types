@@ -86,7 +86,7 @@ pub struct TypeApplication {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoggedType {
-    pub log_id: u64,
+    pub log_id: String,
     #[serde(rename = "loggedType")]
     pub application: TypeApplication,
 }
