@@ -9,7 +9,7 @@ use crate::{
 };
 
 use crate::{
-    error::{error, Result},
+    error::{error, Error, Result},
     utils::TypePath,
 };
 
@@ -119,6 +119,25 @@ impl FullABIFunction {
 
     pub fn is_payable(&self) -> bool {
         self.attributes.iter().any(|attr| attr.name == "payable")
+    }
+
+    pub fn doc_strings(&self) -> Result<Vec<String>> {
+        self.attributes
+            .iter()
+            .filter_map(|attr| {
+                if attr.name == "doc-comment" {
+                    let doc = <[String; 1]>::try_from(attr.arguments.clone())
+                        .map(|[doc]| doc)
+                        .map_err(|_| {
+                            Error("`doc-comment` attribute has more then one argument".to_string())
+                        });
+
+                    Some(doc)
+                } else {
+                    None
+                }
+            })
+            .collect::<Result<Vec<String>>>()
     }
 
     pub fn from_counterpart(
