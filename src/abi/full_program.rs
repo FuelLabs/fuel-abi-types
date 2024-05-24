@@ -124,22 +124,13 @@ impl FullABIFunction {
     pub fn doc_strings(&self) -> Result<Vec<String>> {
         self.attributes
             .iter()
-            .filter_map(|attr| {
-                if attr.name == "doc-comment" {
-                    let doc_res = {
-                        if attr.arguments.len() != 1 {
-                            Err(Error(
-                                "`doc-comment` attribute must have one argument".to_string(),
-                            ))
-                        } else {
-                            Ok(attr.arguments[0].clone())
-                        }
-                    };
-
-                    Some(doc_res)
-                } else {
-                    None
-                }
+            .filter(|attr| attr.name == "doc-comment")
+            .map(|attr| {
+                (attr.arguments.len() == 1)
+                    .then_some(attr.arguments[0].clone())
+                    .ok_or_else(|| {
+                        Error("`doc-comment` attribute must have one argument".to_string())
+                    })
             })
             .collect::<Result<Vec<String>>>()
     }
