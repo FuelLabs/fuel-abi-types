@@ -39,7 +39,7 @@ impl FullProgramABI {
         let lookup: HashMap<_, _> = program_abi
             .types
             .iter()
-            .map(|ttype| (ttype.type_id, ttype.clone()))
+            .map(|ttype| (ttype.type_id.clone(), ttype.clone()))
             .collect();
 
         let types = program_abi
@@ -137,7 +137,7 @@ impl FullABIFunction {
 
     pub fn from_counterpart(
         abi_function: &ABIFunction,
-        types: &HashMap<usize, TypeDeclaration>,
+        types: &HashMap<String, TypeDeclaration>,
     ) -> Result<FullABIFunction> {
         let inputs = abi_function
             .inputs
@@ -168,7 +168,7 @@ pub struct FullTypeDeclaration {
 impl FullTypeDeclaration {
     pub fn from_counterpart(
         type_decl: &TypeDeclaration,
-        types: &HashMap<usize, TypeDeclaration>,
+        types: &HashMap<String, TypeDeclaration>,
     ) -> FullTypeDeclaration {
         let components = type_decl
             .components
@@ -210,7 +210,7 @@ pub struct FullTypeApplication {
 impl FullTypeApplication {
     pub fn from_counterpart(
         type_application: &TypeApplication,
-        types: &HashMap<usize, TypeDeclaration>,
+        types: &HashMap<String, TypeDeclaration>,
     ) -> FullTypeApplication {
         let type_arguments = type_application
             .type_arguments
@@ -242,7 +242,7 @@ pub struct FullLoggedType {
 impl FullLoggedType {
     fn from_counterpart(
         logged_type: &LoggedType,
-        types: &HashMap<usize, TypeDeclaration>,
+        types: &HashMap<String, TypeDeclaration>,
     ) -> FullLoggedType {
         FullLoggedType {
             log_id: logged_type.log_id.clone(),
@@ -261,7 +261,7 @@ pub struct FullConfigurable {
 impl FullConfigurable {
     pub fn from_counterpart(
         configurable: &Configurable,
-        types: &HashMap<usize, TypeDeclaration>,
+        types: &HashMap<String, TypeDeclaration>,
     ) -> FullConfigurable {
         FullConfigurable {
             name: configurable.name.clone(),
@@ -312,29 +312,33 @@ mod tests {
     fn can_convert_into_full_type_decl() {
         // given
         let type_0 = TypeDeclaration {
-            type_id: 0,
+            type_id: "9da470e78078ef5bf7aabdd59e465abbd0b288fb01443a5777c8bcf6488a747b".to_string(),
             type_field: "type_0".to_string(),
             components: Some(vec![TypeApplication {
                 name: "type_0_component_a".to_string(),
-                type_id: 1,
+                type_id: "0bb3a6b090834070f46e91d3e25184ec5d701976dc5cebe3d1fc121948231fb0"
+                    .to_string(),
                 type_arguments: Some(vec![TypeApplication {
                     name: "type_0_type_arg_0".to_string(),
-                    type_id: 2,
+                    type_id: "00b4c853d51a6da239f08800898a6513eaa6950018fb89def110627830eb323f"
+                        .to_string(),
                     type_arguments: None,
                 }]),
             }]),
-            type_parameters: Some(vec![2]),
+            type_parameters: Some(vec![
+                "00b4c853d51a6da239f08800898a6513eaa6950018fb89def110627830eb323f".to_string(),
+            ]),
         };
 
         let type_1 = TypeDeclaration {
-            type_id: 1,
+            type_id: "0bb3a6b090834070f46e91d3e25184ec5d701976dc5cebe3d1fc121948231fb0".to_string(),
             type_field: "type_1".to_string(),
             components: None,
             type_parameters: None,
         };
 
         let type_2 = TypeDeclaration {
-            type_id: 2,
+            type_id: "00b4c853d51a6da239f08800898a6513eaa6950018fb89def110627830eb323f".to_string(),
             type_field: "type_2".to_string(),
             components: None,
             type_parameters: None,
@@ -342,7 +346,7 @@ mod tests {
 
         let types = [&type_0, &type_1, &type_2]
             .iter()
-            .map(|&ttype| (ttype.type_id, ttype.clone()))
+            .map(|&ttype| (ttype.type_id.clone(), ttype.clone()))
             .collect::<HashMap<_, _>>();
 
         // when
@@ -380,23 +384,24 @@ mod tests {
     fn can_convert_into_full_type_appl() {
         let application = TypeApplication {
             name: "ta_0".to_string(),
-            type_id: 0,
+            type_id: "9da470e78078ef5bf7aabdd59e465abbd0b288fb01443a5777c8bcf6488a747b".to_string(),
             type_arguments: Some(vec![TypeApplication {
                 name: "ta_1".to_string(),
-                type_id: 1,
+                type_id: "0bb3a6b090834070f46e91d3e25184ec5d701976dc5cebe3d1fc121948231fb0"
+                    .to_string(),
                 type_arguments: None,
             }]),
         };
 
         let type_0 = TypeDeclaration {
-            type_id: 0,
+            type_id: "9da470e78078ef5bf7aabdd59e465abbd0b288fb01443a5777c8bcf6488a747b".to_string(),
             type_field: "type_0".to_string(),
             components: None,
             type_parameters: None,
         };
 
         let type_1 = TypeDeclaration {
-            type_id: 1,
+            type_id: "0bb3a6b090834070f46e91d3e25184ec5d701976dc5cebe3d1fc121948231fb0".to_string(),
             type_field: "type_1".to_string(),
             components: None,
             type_parameters: None,
@@ -404,7 +409,7 @@ mod tests {
 
         let types = [&type_0, &type_1]
             .into_iter()
-            .map(|ttype| (ttype.type_id, ttype.clone()))
+            .map(|ttype| (ttype.type_id.clone(), ttype.clone()))
             .collect::<HashMap<_, _>>();
 
         // given
