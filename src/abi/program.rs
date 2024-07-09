@@ -10,6 +10,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Default, Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProgramABI {
+    pub program_type: String,
+    pub spec_version: Version,
+    pub abi_version: Version,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoding: Option<Version>,
     pub types: Vec<TypeDeclaration>,
@@ -67,11 +70,11 @@ impl ABIFunction {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TypeDeclaration {
-    pub type_id: usize,
+    pub type_id: String,
     #[serde(rename = "type")]
     pub type_field: String,
     pub components: Option<Vec<TypeApplication>>, // Used for custom types
-    pub type_parameters: Option<Vec<usize>>,
+    pub type_parameters: Option<Vec<String>>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,7 +82,7 @@ pub struct TypeDeclaration {
 pub struct TypeApplication {
     pub name: String,
     #[serde(rename = "type")]
-    pub type_id: usize,
+    pub type_id: String,
     pub type_arguments: Option<Vec<TypeApplication>>,
 }
 
