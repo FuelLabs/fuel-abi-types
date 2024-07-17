@@ -12,10 +12,9 @@ use serde::{Deserialize, Serialize};
 pub struct ProgramABI {
     pub program_type: String,
     pub spec_version: Version,
-    pub abi_version: Version,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encoding: Option<Version>,
-    pub types: Vec<TypeDeclaration>,
+    pub encoding_version: Version,
+    pub concrete_types: Vec<TypeConcreteDeclaration>,
+    pub types_metadata: Vec<TypeMetadataDeclaration>,
     pub functions: Vec<ABIFunction>,
     pub logged_types: Option<Vec<LoggedType>>,
     pub messages_types: Option<Vec<MessageType>>,
@@ -49,12 +48,37 @@ impl Version {
     }
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub struct ConcreteTypeId(pub String);
+
+impl From<&str> for ConcreteTypeId {
+    fn from(value: &str) -> Self {
+        ConcreteTypeId(value.into())
+    }
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub struct MetadataTypeId(pub usize);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+#[serde(untagged)]
+pub enum TypeId {
+    Concrete(ConcreteTypeId),
+    Metadata(MetadataTypeId),
+}
+
+impl Default for TypeId {
+    fn default() -> Self {
+        TypeId::Metadata(MetadataTypeId(usize::MAX))
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ABIFunction {
-    pub inputs: Vec<TypeApplication>,
+    pub inputs: Vec<TypeConcreteParameter>,
     pub name: String,
-    pub output: TypeApplication,
+    pub output: ConcreteTypeId,
     pub attributes: Option<Vec<Attribute>>,
 }
 
@@ -69,20 +93,41 @@ impl ABIFunction {
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TypeDeclaration {
-    pub type_id: String,
+pub struct TypeMetadataDeclaration {
     #[serde(rename = "type")]
     pub type_field: String,
+    pub metadata_type_id: MetadataTypeId,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub components: Option<Vec<TypeApplication>>, // Used for custom types
-    pub type_parameters: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub type_parameters: Option<Vec<MetadataTypeId>>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TypeConcreteDeclaration {
+    #[serde(rename = "type")]
+    pub type_field: String,
+    pub concrete_type_id: ConcreteTypeId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata_type_id: Option<MetadataTypeId>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub type_arguments: Option<Vec<ConcreteTypeId>>,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TypeConcreteParameter {
+    pub name: String,
+    pub concrete_type_id: ConcreteTypeId,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TypeApplication {
     pub name: String,
-    #[serde(rename = "type")]
-    pub type_id: String,
+    pub type_id: TypeId,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub type_arguments: Option<Vec<TypeApplication>>,
 }
 
@@ -90,24 +135,21 @@ pub struct TypeApplication {
 #[serde(rename_all = "camelCase")]
 pub struct LoggedType {
     pub log_id: String,
-    #[serde(rename = "loggedType")]
-    pub application: TypeApplication,
+    pub concrete_type_id: ConcreteTypeId,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MessageType {
-    pub message_id: u64,
-    #[serde(rename = "messageType")]
-    pub application: TypeApplication,
+    pub message_id: String,
+    pub concrete_type_id: ConcreteTypeId,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Configurable {
     pub name: String,
-    #[serde(rename = "configurableType")]
-    pub application: TypeApplication,
+    pub concrete_type_id: ConcreteTypeId,
     pub offset: u64,
 }
 
