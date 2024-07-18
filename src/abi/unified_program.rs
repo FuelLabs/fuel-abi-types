@@ -34,7 +34,7 @@ impl UnifiedProgramABI {
         UnifiedProgramABI::from_counterpart(&parsed_abi)
     }
 
-    fn from_counterpart(program_abi: &ProgramABI) -> Result<UnifiedProgramABI> {
+    pub fn from_counterpart(program_abi: &ProgramABI) -> Result<UnifiedProgramABI> {
         let mut extended_concrete_types = program_abi.concrete_types.clone();
         let mut extended_types_metadata = program_abi.types_metadata.clone();
         let mut next_metadata_type_id = extended_types_metadata
