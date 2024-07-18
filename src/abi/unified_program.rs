@@ -16,7 +16,7 @@ use crate::{
 use super::program::{self, ConcreteTypeId, MessageType, TypeId, Version};
 
 /// 'Unified' versions of the ABI structures removes concrete types and types metadata and unifies them under a single types declarations array.
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct UnifiedProgramABI {
     pub program_type: String,
     pub spec_version: Version,
@@ -127,7 +127,7 @@ impl UnifiedProgramABI {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct UnifiedABIFunction {
     pub name: String,
     pub inputs: Vec<UnifiedTypeApplication>,
@@ -193,7 +193,7 @@ impl UnifiedABIFunction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct UnifiedTypeDeclaration {
     pub type_id: usize,
     pub type_field: String,
@@ -247,7 +247,7 @@ impl UnifiedTypeDeclaration {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct UnifiedTypeApplication {
     pub type_id: usize,
     pub name: String,
@@ -291,7 +291,7 @@ impl UnifiedTypeApplication {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone, Eq, PartialEq)]
 pub struct UnifiedLoggedType {
     pub log_id: String,
     pub application: UnifiedTypeApplication,
@@ -316,7 +316,7 @@ impl UnifiedLoggedType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct UnifiedConfigurable {
     pub name: String,
     pub application: UnifiedTypeApplication,
@@ -343,7 +343,7 @@ impl UnifiedConfigurable {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct UnifiedMessageType {
     pub message_id: String,
     pub application: UnifiedTypeApplication,
