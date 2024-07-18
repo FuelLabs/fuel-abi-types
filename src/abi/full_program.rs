@@ -1,23 +1,23 @@
 use std::collections::HashMap;
 
-use crate::{
-    abi::program::{
-        ABIFunction, Attribute, Configurable, LoggedType, ProgramABI, TypeApplication,
-        TypeMetadataDeclaration,
-    },
-    utils::extract_custom_type_name,
-};
+use crate::{abi::program::Attribute, utils::extract_custom_type_name};
 
 use crate::{
     error::{error, Error, Result},
     utils::TypePath,
 };
 
-use super::program::{ConcreteTypeId, TypeConcreteDeclaration, TypeId, Version};
+use super::{
+    program::Version,
+    unified_program::{
+        UnifiedABIFunction, UnifiedConfigurable, UnifiedLoggedType, UnifiedProgramABI,
+        UnifiedTypeApplication, UnifiedTypeDeclaration,
+    },
+};
 
 /// 'Full' versions of the ABI structures are needed to simplify duplicate
-/// detection later on. The original ones([`ProgramABI`], [`TypeApplication`],
-/// [`TypeDeclaration`] and others) are not suited for this due to their use of
+/// detection later on. The original ones([`UnifiedProgramABI`], [`UnifiedTypeApplication`],
+/// [`UnifiedTypeDeclaration`] and others) are not suited for this due to their use of
 /// ids, which might differ between contracts even though the type they
 /// represent is virtually the same.
 #[derive(Debug, Clone)]
@@ -33,126 +33,47 @@ pub struct FullProgramABI {
 
 impl FullProgramABI {
     pub fn from_json_abi(abi: &str) -> Result<Self> {
-        let parsed_abi: ProgramABI = serde_json::from_str(abi)?;
-        FullProgramABI::from_counterpart(&parsed_abi)
+        let unified_program_abi = UnifiedProgramABI::from_json_abi(abi)?;
+        FullProgramABI::from_counterpart(&unified_program_abi)
     }
 
-    fn from_counterpart(program_abi: &ProgramABI) -> Result<FullProgramABI> {
-        let mut metadata_types_lookup: HashMap<_, _> = program_abi
-            .types_metadata
+    fn from_counterpart(unified_program_abi: &UnifiedProgramABI) -> Result<FullProgramABI> {
+        let lookup: HashMap<_, _> = unified_program_abi
+            .types
             .iter()
-            .map(|ttype| {
-                (
-                    TypeId::Metadata(ttype.metadata_type_id.clone()),
-                    ttype.clone(),
-                )
-            })
+            .map(|ttype| (ttype.type_id, ttype.clone()))
             .collect();
 
-        let original_metadata_types_lookup = metadata_types_lookup.clone();
-
-        //Extends lookup table with TypeMetadataDeclaration for concrete types.
-        metadata_types_lookup.extend(program_abi.concrete_types.iter().map(|ctype| {
-            if let Some(metadata_type_id) = &ctype.metadata_type_id {
-                (
-                    TypeId::Concrete(ctype.concrete_type_id.clone()),
-                    original_metadata_types_lookup
-                        .get(&TypeId::Metadata(metadata_type_id.clone()))
-                        .unwrap()
-                        .clone(),
-                )
-            } else {
-                (
-                    TypeId::Concrete(ctype.concrete_type_id.clone()),
-                    TypeMetadataDeclaration {
-                        type_field: ctype.type_field.clone(),
-                        metadata_type_id: Default::default(), //This should not be used anymore.
-                        components: None,
-                        type_parameters: None,
-                    },
-                )
-            }
-        }));
-
-        let concrete_types_lookup: HashMap<_, _> = program_abi
-            .concrete_types
+        let types = unified_program_abi
+            .types
             .iter()
-            .map(|ctype| (ctype.concrete_type_id.clone(), ctype.clone()))
+            .map(|ttype| FullTypeDeclaration::from_counterpart(ttype, &lookup))
             .collect();
 
-        let mut types: Vec<FullTypeDeclaration> = program_abi
-            .types_metadata
-            .iter()
-            .map(|ttype| {
-                FullTypeDeclaration::from_metadata_declaration(
-                    ttype,
-                    &metadata_types_lookup,
-                    &concrete_types_lookup,
-                )
-            })
-            .collect();
-
-        //Extends lookup table with TypeMetadataDeclaration for concrete types.
-        //This will add TypeMetadataDeclaration for built in types.
-        types.extend(program_abi.concrete_types.iter().filter_map(|ctype| {
-            if ctype.metadata_type_id.is_none() {
-                Some(FullTypeDeclaration::from_metadata_declaration(
-                    &TypeMetadataDeclaration {
-                        type_field: ctype.type_field.clone(),
-                        metadata_type_id: Default::default(), //This should not be used anymore.
-                        components: None,
-                        type_parameters: None,
-                    },
-                    &metadata_types_lookup,
-                    &concrete_types_lookup,
-                ))
-            } else {
-                None
-            }
-        }));
-
-        let functions = program_abi
+        let functions = unified_program_abi
             .functions
             .iter()
-            .map(|fun| {
-                FullABIFunction::from_counterpart(
-                    fun,
-                    &metadata_types_lookup,
-                    &concrete_types_lookup,
-                )
-            })
+            .map(|fun| FullABIFunction::from_counterpart(fun, &lookup))
             .collect::<Result<Vec<_>>>()?;
 
-        let logged_types = program_abi
+        let logged_types = unified_program_abi
             .logged_types
             .iter()
             .flatten()
-            .map(|logged_type| {
-                FullLoggedType::from_counterpart(
-                    logged_type,
-                    &metadata_types_lookup,
-                    &concrete_types_lookup,
-                )
-            })
+            .map(|logged_type| FullLoggedType::from_counterpart(logged_type, &lookup))
             .collect();
 
-        let configurables = program_abi
+        let configurables = unified_program_abi
             .configurables
             .iter()
             .flatten()
-            .map(|configurable| {
-                FullConfigurable::from_counterpart(
-                    configurable,
-                    &metadata_types_lookup,
-                    &concrete_types_lookup,
-                )
-            })
+            .map(|configurable| FullConfigurable::from_counterpart(configurable, &lookup))
             .collect();
 
         Ok(Self {
-            encoding_version: program_abi.encoding_version.clone(),
-            spec_version: program_abi.spec_version.clone(),
-            program_type: program_abi.program_type.clone(),
+            program_type: unified_program_abi.program_type.clone(),
+            spec_version: unified_program_abi.spec_version.clone(),
+            encoding_version: unified_program_abi.encoding_version.clone(),
             types,
             functions,
             logged_types,
@@ -219,21 +140,13 @@ impl FullABIFunction {
     }
 
     pub fn from_counterpart(
-        abi_function: &ABIFunction,
-        metadata_types: &HashMap<TypeId, TypeMetadataDeclaration>,
-        concrete_types: &HashMap<ConcreteTypeId, TypeConcreteDeclaration>,
+        abi_function: &UnifiedABIFunction,
+        types: &HashMap<usize, UnifiedTypeDeclaration>,
     ) -> Result<FullABIFunction> {
         let inputs = abi_function
             .inputs
             .iter()
-            .map(|input| {
-                FullTypeApplication::from_concrete_type_id(
-                    input.name.clone(),
-                    &input.concrete_type_id,
-                    metadata_types,
-                    concrete_types,
-                )
-            })
+            .map(|input| FullTypeApplication::from_counterpart(input, types))
             .collect();
 
         let attributes = abi_function
@@ -243,12 +156,7 @@ impl FullABIFunction {
         FullABIFunction::new(
             abi_function.name.clone(),
             inputs,
-            FullTypeApplication::from_concrete_type_id(
-                "".to_string(),
-                &abi_function.output,
-                metadata_types,
-                concrete_types,
-            ),
+            FullTypeApplication::from_counterpart(&abi_function.output, types),
             attributes,
         )
     }
@@ -262,32 +170,23 @@ pub struct FullTypeDeclaration {
 }
 
 impl FullTypeDeclaration {
-    pub fn from_metadata_declaration(
-        type_decl: &TypeMetadataDeclaration,
-        metadata_types: &HashMap<TypeId, TypeMetadataDeclaration>,
-        concrete_types: &HashMap<ConcreteTypeId, TypeConcreteDeclaration>,
+    pub fn from_counterpart(
+        type_decl: &UnifiedTypeDeclaration,
+        types: &HashMap<usize, UnifiedTypeDeclaration>,
     ) -> FullTypeDeclaration {
         let components = type_decl
             .components
             .clone()
             .unwrap_or_default()
             .into_iter()
-            .map(|application| {
-                FullTypeApplication::from_counterpart(&application, metadata_types, concrete_types)
-            })
+            .map(|application| FullTypeApplication::from_counterpart(&application, types))
             .collect();
         let type_parameters = type_decl
             .type_parameters
             .clone()
             .unwrap_or_default()
             .into_iter()
-            .map(|id| {
-                FullTypeDeclaration::from_metadata_declaration(
-                    metadata_types.get(&TypeId::Metadata(id)).unwrap(),
-                    metadata_types,
-                    concrete_types,
-                )
-            })
+            .map(|id| FullTypeDeclaration::from_counterpart(types.get(&id).unwrap(), types))
             .collect();
         FullTypeDeclaration {
             type_field: type_decl.type_field.clone(),
@@ -314,83 +213,24 @@ pub struct FullTypeApplication {
 
 impl FullTypeApplication {
     pub fn from_counterpart(
-        type_application: &TypeApplication,
-        metadata_types: &HashMap<TypeId, TypeMetadataDeclaration>,
-        concrete_types: &HashMap<ConcreteTypeId, TypeConcreteDeclaration>,
+        type_application: &UnifiedTypeApplication,
+        types: &HashMap<usize, UnifiedTypeDeclaration>,
     ) -> FullTypeApplication {
         let type_arguments = type_application
             .type_arguments
             .clone()
             .unwrap_or_default()
             .into_iter()
-            .map(|application| {
-                FullTypeApplication::from_counterpart(&application, metadata_types, concrete_types)
-            })
+            .map(|application| FullTypeApplication::from_counterpart(&application, types))
             .collect();
 
-        let type_decl = FullTypeDeclaration::from_metadata_declaration(
-            metadata_types.get(&type_application.type_id).unwrap(),
-            metadata_types,
-            concrete_types,
+        let type_decl = FullTypeDeclaration::from_counterpart(
+            types.get(&type_application.type_id).unwrap(),
+            types,
         );
 
         FullTypeApplication {
             name: type_application.name.clone(),
-            type_decl,
-            type_arguments,
-        }
-    }
-
-    pub fn from_concrete_type_id(
-        name: String,
-        concrete_type_id: &ConcreteTypeId,
-        metadata_types: &HashMap<TypeId, TypeMetadataDeclaration>,
-        concrete_types: &HashMap<ConcreteTypeId, TypeConcreteDeclaration>,
-    ) -> FullTypeApplication {
-        let concrete_decl = concrete_types.get(concrete_type_id).unwrap();
-
-        if concrete_decl.metadata_type_id.is_none() {
-            assert!(concrete_decl.type_arguments.is_none(),"When concrete_decl.metadata_type_id is none, concrete_decl.type_arguments must also be none.");
-            return FullTypeApplication {
-                name,
-                type_decl: FullTypeDeclaration::from_metadata_declaration(
-                    metadata_types
-                        .get(&TypeId::Concrete(concrete_type_id.clone()))
-                        .unwrap(),
-                    metadata_types,
-                    concrete_types,
-                ),
-                type_arguments: vec![],
-            };
-        }
-
-        let type_arguments = concrete_decl
-            .type_arguments
-            .clone()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|ctype_id| {
-                FullTypeApplication::from_concrete_type_id(
-                    "".to_string(),
-                    &ctype_id,
-                    metadata_types,
-                    concrete_types,
-                )
-            })
-            .collect();
-
-        let type_decl = FullTypeDeclaration::from_metadata_declaration(
-            metadata_types
-                .get(&TypeId::Metadata(
-                    concrete_decl.metadata_type_id.clone().unwrap(),
-                ))
-                .unwrap(),
-            metadata_types,
-            concrete_types,
-        );
-
-        FullTypeApplication {
-            name,
             type_decl,
             type_arguments,
         }
@@ -405,18 +245,12 @@ pub struct FullLoggedType {
 
 impl FullLoggedType {
     fn from_counterpart(
-        logged_type: &LoggedType,
-        metadata_types: &HashMap<TypeId, TypeMetadataDeclaration>,
-        concrete_types: &HashMap<ConcreteTypeId, TypeConcreteDeclaration>,
+        logged_type: &UnifiedLoggedType,
+        types: &HashMap<usize, UnifiedTypeDeclaration>,
     ) -> FullLoggedType {
         FullLoggedType {
             log_id: logged_type.log_id.clone(),
-            application: FullTypeApplication::from_concrete_type_id(
-                "".to_string(),
-                &logged_type.concrete_type_id,
-                metadata_types,
-                concrete_types,
-            ),
+            application: FullTypeApplication::from_counterpart(&logged_type.application, types),
         }
     }
 }
@@ -430,18 +264,12 @@ pub struct FullConfigurable {
 
 impl FullConfigurable {
     pub fn from_counterpart(
-        configurable: &Configurable,
-        metadata_types: &HashMap<TypeId, TypeMetadataDeclaration>,
-        concrete_types: &HashMap<ConcreteTypeId, TypeConcreteDeclaration>,
+        configurable: &UnifiedConfigurable,
+        types: &HashMap<usize, UnifiedTypeDeclaration>,
     ) -> FullConfigurable {
         FullConfigurable {
             name: configurable.name.clone(),
-            application: FullTypeApplication::from_concrete_type_id(
-                configurable.name.clone(),
-                &configurable.concrete_type_id,
-                metadata_types,
-                concrete_types,
-            ),
+            application: FullTypeApplication::from_counterpart(&configurable.application, types),
             offset: configurable.offset,
         }
     }
@@ -465,8 +293,6 @@ impl FullTypeDeclaration {
 mod tests {
     use std::collections::HashMap;
 
-    use crate::abi::program::MetadataTypeId;
-
     use super::*;
 
     #[test]
@@ -489,51 +315,42 @@ mod tests {
     #[test]
     fn can_convert_into_full_type_decl() {
         // given
-        let type_0 = TypeMetadataDeclaration {
-            metadata_type_id: MetadataTypeId(0),
+        let type_0 = UnifiedTypeDeclaration {
+            type_id: 0,
             type_field: "type_0".to_string(),
-            components: Some(vec![TypeApplication {
+            components: Some(vec![UnifiedTypeApplication {
                 name: "type_0_component_a".to_string(),
-                type_id: TypeId::Metadata(MetadataTypeId(1)),
-                type_arguments: Some(vec![TypeApplication {
+                type_id: 1,
+                type_arguments: Some(vec![UnifiedTypeApplication {
                     name: "type_0_type_arg_0".to_string(),
-                    type_id: TypeId::Metadata(MetadataTypeId(2)),
+                    type_id: 2,
                     type_arguments: None,
                 }]),
             }]),
-            type_parameters: Some(vec![MetadataTypeId(2)]),
+            type_parameters: Some(vec![2]),
         };
 
-        let type_1 = TypeMetadataDeclaration {
-            metadata_type_id: MetadataTypeId(1),
+        let type_1 = UnifiedTypeDeclaration {
+            type_id: 1,
             type_field: "type_1".to_string(),
             components: None,
             type_parameters: None,
         };
 
-        let type_2 = TypeMetadataDeclaration {
-            metadata_type_id: MetadataTypeId(2),
+        let type_2 = UnifiedTypeDeclaration {
+            type_id: 2,
             type_field: "type_2".to_string(),
             components: None,
             type_parameters: None,
         };
 
-        let metadata_types = [&type_0, &type_1, &type_2]
+        let types = [&type_0, &type_1, &type_2]
             .iter()
-            .map(|&ttype| {
-                (
-                    TypeId::Metadata(ttype.metadata_type_id.clone()),
-                    ttype.clone(),
-                )
-            })
+            .map(|&ttype| (ttype.type_id, ttype.clone()))
             .collect::<HashMap<_, _>>();
 
         // when
-        let sut = FullTypeDeclaration::from_metadata_declaration(
-            &type_0,
-            &metadata_types,
-            &HashMap::<ConcreteTypeId, TypeConcreteDeclaration>::new(),
-        );
+        let sut = FullTypeDeclaration::from_counterpart(&type_0, &types);
 
         // then
         let type_2_decl = FullTypeDeclaration {
@@ -565,25 +382,25 @@ mod tests {
 
     #[test]
     fn can_convert_into_full_type_appl() {
-        let application = TypeApplication {
+        let application = UnifiedTypeApplication {
             name: "ta_0".to_string(),
-            type_id: TypeId::Metadata(MetadataTypeId(0)),
-            type_arguments: Some(vec![TypeApplication {
+            type_id: 0,
+            type_arguments: Some(vec![UnifiedTypeApplication {
                 name: "ta_1".to_string(),
-                type_id: TypeId::Metadata(MetadataTypeId(1)),
+                type_id: 1,
                 type_arguments: None,
             }]),
         };
 
-        let type_0 = TypeMetadataDeclaration {
-            metadata_type_id: MetadataTypeId(0),
+        let type_0 = UnifiedTypeDeclaration {
+            type_id: 0,
             type_field: "type_0".to_string(),
             components: None,
             type_parameters: None,
         };
 
-        let type_1 = TypeMetadataDeclaration {
-            metadata_type_id: MetadataTypeId(1),
+        let type_1 = UnifiedTypeDeclaration {
+            type_id: 1,
             type_field: "type_1".to_string(),
             components: None,
             type_parameters: None,
@@ -591,20 +408,11 @@ mod tests {
 
         let types = [&type_0, &type_1]
             .into_iter()
-            .map(|ttype| {
-                (
-                    TypeId::Metadata(ttype.metadata_type_id.clone()),
-                    ttype.clone(),
-                )
-            })
+            .map(|ttype| (ttype.type_id, ttype.clone()))
             .collect::<HashMap<_, _>>();
 
         // given
-        let sut = FullTypeApplication::from_counterpart(
-            &application,
-            &types,
-            &HashMap::<ConcreteTypeId, TypeConcreteDeclaration>::new(),
-        );
+        let sut = FullTypeApplication::from_counterpart(&application, &types);
 
         // then
         assert_eq!(
