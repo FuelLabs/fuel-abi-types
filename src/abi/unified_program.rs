@@ -162,12 +162,9 @@ impl UnifiedABIFunction {
             .inputs
             .iter()
             .map(|input| {
-                UnifiedTypeApplication::from_counterpart(
-                    &TypeApplication {
-                        name: input.name.clone(),
-                        type_id: TypeId::Concrete(input.concrete_type_id.clone()),
-                        type_arguments: None,
-                    },
+                UnifiedTypeApplication::from_concrete_type_id(
+                    input.name.clone(),
+                    input.concrete_type_id.clone(),
                     concrete_types_lookup,
                 )
             })
@@ -180,12 +177,9 @@ impl UnifiedABIFunction {
         UnifiedABIFunction::new(
             abi_function.name.clone(),
             inputs,
-            UnifiedTypeApplication::from_counterpart(
-                &TypeApplication {
-                    name: "".to_string(),
-                    type_id: TypeId::Concrete(abi_function.output.clone()),
-                    type_arguments: None,
-                },
+            UnifiedTypeApplication::from_concrete_type_id(
+                "".to_string(),
+                abi_function.output.clone(),
                 concrete_types_lookup,
             ),
             attributes,
@@ -289,6 +283,42 @@ impl UnifiedTypeApplication {
             },
         }
     }
+
+    pub fn from_concrete_type_id(
+        name: String,
+        concrete_type_id: ConcreteTypeId,
+        concrete_types_lookup: &HashMap<ConcreteTypeId, TypeConcreteDeclaration>,
+    ) -> UnifiedTypeApplication {
+        let concrete_type_decl = concrete_types_lookup
+            .get(&concrete_type_id)
+            .unwrap()
+            .clone();
+        let type_arguments: Vec<UnifiedTypeApplication> = concrete_type_decl
+            .type_arguments
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .map(|concrete_type_id| {
+                UnifiedTypeApplication::from_concrete_type_id(
+                    "".to_string(),
+                    concrete_type_id,
+                    concrete_types_lookup,
+                )
+            })
+            .collect();
+
+        let metadata_type_id = concrete_type_decl.metadata_type_id.unwrap();
+
+        UnifiedTypeApplication {
+            name,
+            type_id: metadata_type_id.0,
+            type_arguments: if type_arguments.is_empty() {
+                None
+            } else {
+                Some(type_arguments)
+            },
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
@@ -304,12 +334,9 @@ impl UnifiedLoggedType {
     ) -> UnifiedLoggedType {
         UnifiedLoggedType {
             log_id: logged_type.log_id.clone(),
-            application: UnifiedTypeApplication::from_counterpart(
-                &TypeApplication {
-                    name: "".to_string(),
-                    type_id: TypeId::Concrete(logged_type.concrete_type_id.clone()),
-                    type_arguments: None,
-                },
+            application: UnifiedTypeApplication::from_concrete_type_id(
+                "".to_string(),
+                logged_type.concrete_type_id.clone(),
                 concrete_types_lookup,
             ),
         }
@@ -330,12 +357,9 @@ impl UnifiedConfigurable {
     ) -> UnifiedConfigurable {
         UnifiedConfigurable {
             name: configurable.name.clone(),
-            application: UnifiedTypeApplication::from_counterpart(
-                &TypeApplication {
-                    name: "".to_string(),
-                    type_id: TypeId::Concrete(configurable.concrete_type_id.clone()),
-                    type_arguments: None,
-                },
+            application: UnifiedTypeApplication::from_concrete_type_id(
+                "".to_string(),
+                configurable.concrete_type_id.clone(),
                 concrete_types_lookup,
             ),
             offset: configurable.offset,
@@ -356,12 +380,9 @@ impl UnifiedMessageType {
     ) -> UnifiedMessageType {
         UnifiedMessageType {
             message_id: message_type.message_id.clone(),
-            application: UnifiedTypeApplication::from_counterpart(
-                &TypeApplication {
-                    name: "".to_string(),
-                    type_id: TypeId::Concrete(message_type.concrete_type_id.clone()),
-                    type_arguments: None,
-                },
+            application: UnifiedTypeApplication::from_concrete_type_id(
+                "".to_string(),
+                message_type.concrete_type_id.clone(),
                 concrete_types_lookup,
             ),
         }
