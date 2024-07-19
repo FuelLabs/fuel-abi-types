@@ -253,24 +253,45 @@ impl UnifiedTypeApplication {
         type_application: &TypeApplication,
         concrete_types_lookup: &HashMap<ConcreteTypeId, TypeConcreteDeclaration>,
     ) -> UnifiedTypeApplication {
-        let type_arguments: Vec<UnifiedTypeApplication> = type_application
-            .type_arguments
-            .clone()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|application| {
-                UnifiedTypeApplication::from_counterpart(&application, concrete_types_lookup)
-            })
-            .collect();
-
-        let metadata_type_id = match type_application.type_id.clone() {
-            TypeId::Concrete(concrete_type_id) => concrete_types_lookup
-                .get(&concrete_type_id)
-                .unwrap()
-                .metadata_type_id
-                .clone()
-                .unwrap(),
-            TypeId::Metadata(metadata_type_id) => metadata_type_id,
+        let (metadata_type_id, type_arguments) = match type_application.type_id.clone() {
+            TypeId::Concrete(concrete_type_id) => (
+                concrete_types_lookup
+                    .get(&concrete_type_id)
+                    .unwrap()
+                    .metadata_type_id
+                    .clone()
+                    .unwrap(),
+                concrete_types_lookup
+                    .get(&concrete_type_id)
+                    .unwrap()
+                    .type_arguments
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|concrete_type_id| {
+                        UnifiedTypeApplication::from_concrete_type_id(
+                            "".to_string(),
+                            concrete_type_id,
+                            concrete_types_lookup,
+                        )
+                    })
+                    .collect::<Vec<UnifiedTypeApplication>>(),
+            ),
+            TypeId::Metadata(metadata_type_id) => (
+                metadata_type_id,
+                type_application
+                    .type_arguments
+                    .clone()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|application| {
+                        UnifiedTypeApplication::from_counterpart(
+                            &application,
+                            concrete_types_lookup,
+                        )
+                    })
+                    .collect(),
+            ),
         };
 
         UnifiedTypeApplication {
