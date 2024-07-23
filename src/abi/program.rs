@@ -14,7 +14,7 @@ pub struct ProgramABI {
     pub spec_version: Version,
     pub encoding_version: Version,
     pub concrete_types: Vec<TypeConcreteDeclaration>,
-    pub types_metadata: Vec<TypeMetadataDeclaration>,
+    pub metadata_types: Vec<TypeMetadataDeclaration>,
     pub functions: Vec<ABIFunction>,
     pub logged_types: Option<Vec<LoggedType>>,
     pub messages_types: Option<Vec<MessageType>>,

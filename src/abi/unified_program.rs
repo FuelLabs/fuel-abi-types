@@ -36,8 +36,8 @@ impl UnifiedProgramABI {
 
     pub fn from_counterpart(program_abi: &ProgramABI) -> Result<UnifiedProgramABI> {
         let mut extended_concrete_types = program_abi.concrete_types.clone();
-        let mut extended_types_metadata = program_abi.types_metadata.clone();
-        let mut next_metadata_type_id = extended_types_metadata
+        let mut extended_metadata_types = program_abi.metadata_types.clone();
+        let mut next_metadata_type_id = extended_metadata_types
             .iter()
             .map(|v| v.metadata_type_id.0)
             .max()
@@ -47,7 +47,7 @@ impl UnifiedProgramABI {
         // Ensure every concrete type has an associated type metadata.
         for concrete_type_decl in extended_concrete_types.iter_mut() {
             if concrete_type_decl.metadata_type_id.is_none() {
-                extended_types_metadata.push(TypeMetadataDeclaration {
+                extended_metadata_types.push(TypeMetadataDeclaration {
                     type_field: concrete_type_decl.type_field.clone(),
                     metadata_type_id: program::MetadataTypeId(next_metadata_type_id),
                     components: None,
@@ -64,7 +64,7 @@ impl UnifiedProgramABI {
             .map(|ttype| (ttype.concrete_type_id.clone(), ttype.clone()))
             .collect();
 
-        let types = extended_types_metadata
+        let types = extended_metadata_types
             .iter()
             .map(|ttype| UnifiedTypeDeclaration::from_counterpart(ttype, &concrete_types_lookup))
             .collect();
