@@ -1,28 +1,30 @@
 use std::collections::HashMap;
 
-use crate::{
-    abi::program::{
-        ABIFunction, Attribute, Configurable, LoggedType, ProgramABI, TypeApplication,
-        TypeDeclaration,
-    },
-    utils::extract_custom_type_name,
-};
+use crate::{abi::program::Attribute, utils::extract_custom_type_name};
 
 use crate::{
     error::{error, Error, Result},
     utils::TypePath,
 };
 
-use super::program::Version;
+use super::{
+    program::Version,
+    unified_program::{
+        UnifiedABIFunction, UnifiedConfigurable, UnifiedLoggedType, UnifiedProgramABI,
+        UnifiedTypeApplication, UnifiedTypeDeclaration,
+    },
+};
 
 /// 'Full' versions of the ABI structures are needed to simplify duplicate
-/// detection later on. The original ones([`ProgramABI`], [`TypeApplication`],
-/// [`TypeDeclaration`] and others) are not suited for this due to their use of
+/// detection later on. The original ones([`UnifiedProgramABI`], [`UnifiedTypeApplication`],
+/// [`UnifiedTypeDeclaration`] and others) are not suited for this due to their use of
 /// ids, which might differ between contracts even though the type they
 /// represent is virtually the same.
 #[derive(Debug, Clone)]
 pub struct FullProgramABI {
-    pub encoding: Option<Version>,
+    pub program_type: String,
+    pub spec_version: Version,
+    pub encoding_version: Version,
     pub types: Vec<FullTypeDeclaration>,
     pub functions: Vec<FullABIFunction>,
     pub logged_types: Vec<FullLoggedType>,
@@ -31,37 +33,37 @@ pub struct FullProgramABI {
 
 impl FullProgramABI {
     pub fn from_json_abi(abi: &str) -> Result<Self> {
-        let parsed_abi: ProgramABI = serde_json::from_str(abi)?;
-        FullProgramABI::from_counterpart(&parsed_abi)
+        let unified_program_abi = UnifiedProgramABI::from_json_abi(abi)?;
+        FullProgramABI::from_counterpart(&unified_program_abi)
     }
 
-    fn from_counterpart(program_abi: &ProgramABI) -> Result<FullProgramABI> {
-        let lookup: HashMap<_, _> = program_abi
+    fn from_counterpart(unified_program_abi: &UnifiedProgramABI) -> Result<FullProgramABI> {
+        let lookup: HashMap<_, _> = unified_program_abi
             .types
             .iter()
-            .map(|ttype| (ttype.type_id.clone(), ttype.clone()))
+            .map(|ttype| (ttype.type_id, ttype.clone()))
             .collect();
 
-        let types = program_abi
+        let types = unified_program_abi
             .types
             .iter()
             .map(|ttype| FullTypeDeclaration::from_counterpart(ttype, &lookup))
             .collect();
 
-        let functions = program_abi
+        let functions = unified_program_abi
             .functions
             .iter()
             .map(|fun| FullABIFunction::from_counterpart(fun, &lookup))
             .collect::<Result<Vec<_>>>()?;
 
-        let logged_types = program_abi
+        let logged_types = unified_program_abi
             .logged_types
             .iter()
             .flatten()
             .map(|logged_type| FullLoggedType::from_counterpart(logged_type, &lookup))
             .collect();
 
-        let configurables = program_abi
+        let configurables = unified_program_abi
             .configurables
             .iter()
             .flatten()
@@ -69,7 +71,9 @@ impl FullProgramABI {
             .collect();
 
         Ok(Self {
-            encoding: program_abi.encoding.clone(),
+            program_type: unified_program_abi.program_type.clone(),
+            spec_version: unified_program_abi.spec_version.clone(),
+            encoding_version: unified_program_abi.encoding_version.clone(),
             types,
             functions,
             logged_types,
@@ -136,8 +140,8 @@ impl FullABIFunction {
     }
 
     pub fn from_counterpart(
-        abi_function: &ABIFunction,
-        types: &HashMap<String, TypeDeclaration>,
+        abi_function: &UnifiedABIFunction,
+        types: &HashMap<usize, UnifiedTypeDeclaration>,
     ) -> Result<FullABIFunction> {
         let inputs = abi_function
             .inputs
@@ -167,8 +171,8 @@ pub struct FullTypeDeclaration {
 
 impl FullTypeDeclaration {
     pub fn from_counterpart(
-        type_decl: &TypeDeclaration,
-        types: &HashMap<String, TypeDeclaration>,
+        type_decl: &UnifiedTypeDeclaration,
+        types: &HashMap<usize, UnifiedTypeDeclaration>,
     ) -> FullTypeDeclaration {
         let components = type_decl
             .components
@@ -209,8 +213,8 @@ pub struct FullTypeApplication {
 
 impl FullTypeApplication {
     pub fn from_counterpart(
-        type_application: &TypeApplication,
-        types: &HashMap<String, TypeDeclaration>,
+        type_application: &UnifiedTypeApplication,
+        types: &HashMap<usize, UnifiedTypeDeclaration>,
     ) -> FullTypeApplication {
         let type_arguments = type_application
             .type_arguments
@@ -241,8 +245,8 @@ pub struct FullLoggedType {
 
 impl FullLoggedType {
     fn from_counterpart(
-        logged_type: &LoggedType,
-        types: &HashMap<String, TypeDeclaration>,
+        logged_type: &UnifiedLoggedType,
+        types: &HashMap<usize, UnifiedTypeDeclaration>,
     ) -> FullLoggedType {
         FullLoggedType {
             log_id: logged_type.log_id.clone(),
@@ -260,8 +264,8 @@ pub struct FullConfigurable {
 
 impl FullConfigurable {
     pub fn from_counterpart(
-        configurable: &Configurable,
-        types: &HashMap<String, TypeDeclaration>,
+        configurable: &UnifiedConfigurable,
+        types: &HashMap<usize, UnifiedTypeDeclaration>,
     ) -> FullConfigurable {
         FullConfigurable {
             name: configurable.name.clone(),
@@ -311,34 +315,30 @@ mod tests {
     #[test]
     fn can_convert_into_full_type_decl() {
         // given
-        let type_0 = TypeDeclaration {
-            type_id: "9da470e78078ef5bf7aabdd59e465abbd0b288fb01443a5777c8bcf6488a747b".to_string(),
+        let type_0 = UnifiedTypeDeclaration {
+            type_id: 0,
             type_field: "type_0".to_string(),
-            components: Some(vec![TypeApplication {
+            components: Some(vec![UnifiedTypeApplication {
                 name: "type_0_component_a".to_string(),
-                type_id: "0bb3a6b090834070f46e91d3e25184ec5d701976dc5cebe3d1fc121948231fb0"
-                    .to_string(),
-                type_arguments: Some(vec![TypeApplication {
+                type_id: 1,
+                type_arguments: Some(vec![UnifiedTypeApplication {
                     name: "type_0_type_arg_0".to_string(),
-                    type_id: "00b4c853d51a6da239f08800898a6513eaa6950018fb89def110627830eb323f"
-                        .to_string(),
+                    type_id: 2,
                     type_arguments: None,
                 }]),
             }]),
-            type_parameters: Some(vec![
-                "00b4c853d51a6da239f08800898a6513eaa6950018fb89def110627830eb323f".to_string(),
-            ]),
+            type_parameters: Some(vec![2]),
         };
 
-        let type_1 = TypeDeclaration {
-            type_id: "0bb3a6b090834070f46e91d3e25184ec5d701976dc5cebe3d1fc121948231fb0".to_string(),
+        let type_1 = UnifiedTypeDeclaration {
+            type_id: 1,
             type_field: "type_1".to_string(),
             components: None,
             type_parameters: None,
         };
 
-        let type_2 = TypeDeclaration {
-            type_id: "00b4c853d51a6da239f08800898a6513eaa6950018fb89def110627830eb323f".to_string(),
+        let type_2 = UnifiedTypeDeclaration {
+            type_id: 2,
             type_field: "type_2".to_string(),
             components: None,
             type_parameters: None,
@@ -346,7 +346,7 @@ mod tests {
 
         let types = [&type_0, &type_1, &type_2]
             .iter()
-            .map(|&ttype| (ttype.type_id.clone(), ttype.clone()))
+            .map(|&ttype| (ttype.type_id, ttype.clone()))
             .collect::<HashMap<_, _>>();
 
         // when
@@ -382,26 +382,25 @@ mod tests {
 
     #[test]
     fn can_convert_into_full_type_appl() {
-        let application = TypeApplication {
+        let application = UnifiedTypeApplication {
             name: "ta_0".to_string(),
-            type_id: "9da470e78078ef5bf7aabdd59e465abbd0b288fb01443a5777c8bcf6488a747b".to_string(),
-            type_arguments: Some(vec![TypeApplication {
+            type_id: 0,
+            type_arguments: Some(vec![UnifiedTypeApplication {
                 name: "ta_1".to_string(),
-                type_id: "0bb3a6b090834070f46e91d3e25184ec5d701976dc5cebe3d1fc121948231fb0"
-                    .to_string(),
+                type_id: 1,
                 type_arguments: None,
             }]),
         };
 
-        let type_0 = TypeDeclaration {
-            type_id: "9da470e78078ef5bf7aabdd59e465abbd0b288fb01443a5777c8bcf6488a747b".to_string(),
+        let type_0 = UnifiedTypeDeclaration {
+            type_id: 0,
             type_field: "type_0".to_string(),
             components: None,
             type_parameters: None,
         };
 
-        let type_1 = TypeDeclaration {
-            type_id: "0bb3a6b090834070f46e91d3e25184ec5d701976dc5cebe3d1fc121948231fb0".to_string(),
+        let type_1 = UnifiedTypeDeclaration {
+            type_id: 1,
             type_field: "type_1".to_string(),
             components: None,
             type_parameters: None,
@@ -409,7 +408,7 @@ mod tests {
 
         let types = [&type_0, &type_1]
             .into_iter()
-            .map(|ttype| (ttype.type_id.clone(), ttype.clone()))
+            .map(|ttype| (ttype.type_id, ttype.clone()))
             .collect::<HashMap<_, _>>();
 
         // given
