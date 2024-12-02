@@ -15,6 +15,12 @@ pub const FAILED_ASSERT_EQ_SIGNAL: u64 = 0xffff_ffff_ffff_0003;
 /// Revert with this value for a failing call to `std::assert::assert`.
 pub const FAILED_ASSERT_SIGNAL: u64 = 0xffff_ffff_ffff_0004;
 
+/// Revert with this value for a failing call to `std::assert::assert_ne`.
+pub const FAILED_ASSERT_NE_SIGNAL: u64 = 0xffff_ffff_ffff_0005;
+
+/// Revert with this value for a failing call to `std::revert::revert_with_log`.
+pub const REVERT_WITH_LOG_SIGNAL: u64 = 0xffff_ffff_ffff_0006;
+
 #[derive(Error, Debug)]
 pub enum ErrorSignal {
     #[error("Failing call to `std::revert::require`")]
@@ -27,6 +33,10 @@ pub enum ErrorSignal {
     AssertEq,
     #[error("Failing call to `std::assert::assert`")]
     Assert,
+    #[error("Failing call to `std::assert::assert_ne`")]
+    AssertNe,
+    #[error("Failing call to `std::revert::revert_with_log`")]
+    RevertWithLog,
 }
 
 #[derive(Error, Debug)]
@@ -48,6 +58,10 @@ impl ErrorSignal {
             Ok(Self::AssertEq)
         } else if revert_code == FAILED_ASSERT_SIGNAL {
             Ok(Self::Assert)
+        } else if revert_code == FAILED_ASSERT_NE_SIGNAL {
+            Ok(Self::AssertNe)
+        } else if revert_code == REVERT_WITH_LOG_SIGNAL {
+            Ok(Self::RevertWithLog)
         } else {
             Err(Error::UnknownRevertCode(revert_code))
         }
@@ -62,6 +76,8 @@ impl ErrorSignal {
             ErrorSignal::SendMessage => FAILED_SEND_MESSAGE_SIGNAL,
             ErrorSignal::AssertEq => FAILED_ASSERT_EQ_SIGNAL,
             ErrorSignal::Assert => FAILED_ASSERT_SIGNAL,
+            ErrorSignal::AssertNe => FAILED_ASSERT_NE_SIGNAL,
+            ErrorSignal::RevertWithLog => REVERT_WITH_LOG_SIGNAL,
         }
     }
 }
