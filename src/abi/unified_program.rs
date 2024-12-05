@@ -369,6 +369,7 @@ pub struct UnifiedConfigurable {
     pub name: String,
     pub application: UnifiedTypeApplication,
     pub offset: u64,
+    pub indirect: bool,
 }
 
 impl UnifiedConfigurable {
@@ -384,6 +385,7 @@ impl UnifiedConfigurable {
                 concrete_types_lookup,
             ),
             offset: configurable.offset,
+            indirect: configurable.indirect,
         }
     }
 }
