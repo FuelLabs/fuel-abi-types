@@ -260,6 +260,7 @@ pub struct FullConfigurable {
     pub name: String,
     pub application: FullTypeApplication,
     pub offset: u64,
+    pub indirect: bool,
 }
 
 impl FullConfigurable {
@@ -271,6 +272,7 @@ impl FullConfigurable {
             name: configurable.name.clone(),
             application: FullTypeApplication::from_counterpart(&configurable.application, types),
             offset: configurable.offset,
+            indirect: configurable.indirect,
         }
     }
 }
