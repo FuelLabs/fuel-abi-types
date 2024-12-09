@@ -151,6 +151,7 @@ pub struct Configurable {
     pub name: String,
     pub concrete_type_id: ConcreteTypeId,
     pub offset: u64,
+    #[serde(default)]
     pub indirect: bool,
 }
 
