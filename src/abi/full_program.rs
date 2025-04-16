@@ -90,10 +90,7 @@ impl FullProgramABI {
             logged_types,
             message_types,
             configurables,
-            error_codes: unified_program_abi
-                .error_codes
-                .clone()
-                .unwrap_or_default()
+            error_codes: unified_program_abi.error_codes.clone().unwrap_or_default(),
         })
     }
 }
