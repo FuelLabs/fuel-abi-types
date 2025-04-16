@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     abi::program::{
@@ -13,7 +13,7 @@ use crate::{
     utils::TypePath,
 };
 
-use super::program::{self, ConcreteTypeId, MessageType, TypeId, Version};
+use super::program::{self, ConcreteTypeId, ErrorDetails, MessageType, TypeId, Version};
 
 /// 'Unified' versions of the ABI structures removes concrete types and types metadata and unifies them under a single types declarations array.
 #[derive(Default, Debug, Clone, Eq, PartialEq)]
@@ -24,8 +24,9 @@ pub struct UnifiedProgramABI {
     pub types: Vec<UnifiedTypeDeclaration>,
     pub functions: Vec<UnifiedABIFunction>,
     pub logged_types: Option<Vec<UnifiedLoggedType>>,
-    pub configurables: Option<Vec<UnifiedConfigurable>>,
     pub messages_types: Option<Vec<UnifiedMessageType>>,
+    pub configurables: Option<Vec<UnifiedConfigurable>>,
+    pub error_codes: Option<BTreeMap<u64, ErrorDetails>>,
 }
 
 impl UnifiedProgramABI {
@@ -113,16 +114,17 @@ impl UnifiedProgramABI {
             } else {
                 Some(logged_types)
             },
-            configurables: if configurables.is_empty() {
-                None
-            } else {
-                Some(configurables)
-            },
             messages_types: if messages_types.is_empty() {
                 None
             } else {
                 Some(messages_types)
             },
+            configurables: if configurables.is_empty() {
+                None
+            } else {
+                Some(configurables)
+            },
+            error_codes: program_abi.error_codes.clone(),
         })
     }
 }
@@ -243,8 +245,8 @@ impl UnifiedTypeDeclaration {
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct UnifiedTypeApplication {
-    pub type_id: usize,
     pub name: String,
+    pub type_id: usize,
     pub type_arguments: Option<Vec<UnifiedTypeApplication>>,
 }
 

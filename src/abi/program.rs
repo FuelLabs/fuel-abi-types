@@ -1,5 +1,7 @@
 //! Defines a set of serializable types required for the Fuel VM ABI.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 /// FuelVM ABI representation in JSON, originally specified
@@ -19,6 +21,7 @@ pub struct ProgramABI {
     pub logged_types: Option<Vec<LoggedType>>,
     pub messages_types: Option<Vec<MessageType>>,
     pub configurables: Option<Vec<Configurable>>,
+    pub error_codes: Option<BTreeMap<u64, ErrorDetails>>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,8 +79,8 @@ impl Default for TypeId {
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ABIFunction {
-    pub inputs: Vec<TypeConcreteParameter>,
     pub name: String,
+    pub inputs: Vec<TypeConcreteParameter>,
     pub output: ConcreteTypeId,
     pub attributes: Option<Vec<Attribute>>,
 }
@@ -162,6 +165,23 @@ pub struct Attribute {
     pub arguments: Vec<String>,
 }
 
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorPosition {
+    pub pkg: String,
+    pub file: String,
+    pub line: u64,
+    pub column: u64,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ErrorDetails {
+    pub pos: ErrorPosition,
+    pub log_id: Option<String>,
+    pub msg: Option<String>,
+}
+
 #[test]
 fn version_extraction_test() {
     let v = Version("1.2".to_string());
@@ -175,4 +195,43 @@ fn version_extraction_test() {
     let v = Version("".to_string());
     assert_eq!(v.major(), None);
     assert_eq!(v.minor(), None);
+}
+
+#[test]
+#[ignore = "not a test, just a convenient way to try the serialization out"]
+fn serde_json_serialization_tryout() {
+    let mut abi = ProgramABI::default();
+
+    let mut error_codes = BTreeMap::new();
+
+    error_codes.insert(
+        0,
+        ErrorDetails {
+            pos: ErrorPosition {
+                pkg: "my_lib".to_string(),
+                file: "lib.rs".to_string(),
+                line: 42,
+                column: 13,
+            },
+            log_id: None,
+            msg: Some("Error message.".to_string()),
+        },
+    );
+    error_codes.insert(
+        1,
+        ErrorDetails {
+            pos: ErrorPosition {
+                pkg: "my_contract".to_string(),
+                file: "main.rs".to_string(),
+                line: 21,
+                column: 34,
+            },
+            log_id: Some("4933727799282657266".to_string()),
+            msg: None,
+        },
+    );
+
+    abi.error_codes = Some(error_codes);
+
+    println!("{}", serde_json::to_string_pretty(&abi).unwrap());
 }
