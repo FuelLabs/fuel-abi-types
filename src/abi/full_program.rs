@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::{abi::program::Attribute, utils::extract_custom_type_name};
 
@@ -7,6 +7,8 @@ use crate::{
     utils::TypePath,
 };
 
+use super::program::ErrorDetails;
+use super::unified_program::UnifiedMessageType;
 use super::{
     program::Version,
     unified_program::{
@@ -28,7 +30,9 @@ pub struct FullProgramABI {
     pub types: Vec<FullTypeDeclaration>,
     pub functions: Vec<FullABIFunction>,
     pub logged_types: Vec<FullLoggedType>,
+    pub message_types: Vec<FullMessageType>,
     pub configurables: Vec<FullConfigurable>,
+    pub error_codes: BTreeMap<u64, ErrorDetails>,
 }
 
 impl FullProgramABI {
@@ -63,6 +67,13 @@ impl FullProgramABI {
             .map(|logged_type| FullLoggedType::from_counterpart(logged_type, &lookup))
             .collect();
 
+        let message_types = unified_program_abi
+            .messages_types
+            .iter()
+            .flatten()
+            .map(|message_type| FullMessageType::from_counterpart(message_type, &lookup))
+            .collect();
+
         let configurables = unified_program_abi
             .configurables
             .iter()
@@ -77,7 +88,9 @@ impl FullProgramABI {
             types,
             functions,
             logged_types,
+            message_types,
             configurables,
+            error_codes: unified_program_abi.error_codes.clone().unwrap_or_default(),
         })
     }
 }
@@ -251,6 +264,24 @@ impl FullLoggedType {
         FullLoggedType {
             log_id: logged_type.log_id.clone(),
             application: FullTypeApplication::from_counterpart(&logged_type.application, types),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FullMessageType {
+    pub log_id: String,
+    pub application: FullTypeApplication,
+}
+
+impl FullMessageType {
+    fn from_counterpart(
+        message_type: &UnifiedMessageType,
+        types: &HashMap<usize, UnifiedTypeDeclaration>,
+    ) -> FullMessageType {
+        FullMessageType {
+            log_id: message_type.message_id.clone(),
+            application: FullTypeApplication::from_counterpart(&message_type.application, types),
         }
     }
 }
