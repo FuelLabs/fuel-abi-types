@@ -101,7 +101,7 @@ pub struct TypeMetadataDeclaration {
     pub type_field: String,
     pub metadata_type_id: MetadataTypeId,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub components: Option<Vec<TypeApplication>>, // Used for custom types
+    pub components: Option<Vec<TypeApplication>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_parameters: Option<Vec<MetadataTypeId>>,
 }
@@ -130,6 +130,8 @@ pub struct TypeConcreteParameter {
 pub struct TypeApplication {
     pub name: String,
     pub type_id: TypeId,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_arguments: Option<Vec<TypeApplication>>,
 }
@@ -201,6 +203,34 @@ fn version_extraction_test() {
 #[ignore = "not a test, just a convenient way to try the serialization out"]
 fn serde_json_serialization_tryout() {
     let mut abi = ProgramABI::default();
+
+    abi.concrete_types.push(TypeConcreteDeclaration {
+        type_field: "()".into(),
+        concrete_type_id: ConcreteTypeId("2e38e77b22c314a449e91fafed92a43826ac6aa403ae6a8acb6cf58239fbaf5d".into()),
+        metadata_type_id: None,
+        type_arguments: None,
+    });
+
+    abi.concrete_types.push(TypeConcreteDeclaration {
+        type_field: "enum MyError".into(),
+        concrete_type_id: ConcreteTypeId("44781f4b1eb667f225275b0a1c877dd4b9a8ab01f3cd01f8ed84f95c6cd2f363".into()),
+        metadata_type_id: Some(MetadataTypeId(0)),
+        type_arguments: None,
+    });
+
+    abi.metadata_types.push(TypeMetadataDeclaration {
+        type_field: "enum MyError".into(),
+        metadata_type_id: MetadataTypeId(0),
+        components: Some(vec![
+            TypeApplication {
+                name: "MyErrorVariant".into(),
+                type_id: TypeId::Concrete(ConcreteTypeId("2e38e77b22c314a449e91fafed92a43826ac6aa403ae6a8acb6cf58239fbaf5d".into())),
+                error_message: Some("My error variant error message.".into()),
+                type_arguments: None,
+            }
+        ]),
+        type_parameters: None,
+    });
 
     let mut error_codes = BTreeMap::new();
 

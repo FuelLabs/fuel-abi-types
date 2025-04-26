@@ -176,6 +176,7 @@ impl UnifiedABIFunction {
             .attributes
             .as_ref()
             .map_or(vec![], Clone::clone);
+
         UnifiedABIFunction::new(
             abi_function.name.clone(),
             inputs,
@@ -247,6 +248,7 @@ impl UnifiedTypeDeclaration {
 pub struct UnifiedTypeApplication {
     pub name: String,
     pub type_id: usize,
+    pub error_message: Option<String>,
     pub type_arguments: Option<Vec<UnifiedTypeApplication>>,
 }
 
@@ -299,6 +301,7 @@ impl UnifiedTypeApplication {
         UnifiedTypeApplication {
             name: type_application.name.clone(),
             type_id: metadata_type_id.0,
+            error_message: type_application.error_message.clone(),
             type_arguments: if type_arguments.is_empty() {
                 None
             } else {
@@ -335,6 +338,11 @@ impl UnifiedTypeApplication {
         UnifiedTypeApplication {
             name,
             type_id: metadata_type_id.0,
+            // `from_concrete_type_id` is always used to describe either
+            // a type or, mostly, type arguments. It is never used for
+            // enum fields, and, thus, can never return a `UnifiedTypeApplication`
+            // with an `error_message`.
+            error_message: None,
             type_arguments: if type_arguments.is_empty() {
                 None
             } else {
