@@ -354,9 +354,11 @@ mod tests {
             components: Some(vec![UnifiedTypeApplication {
                 name: "type_0_component_a".to_string(),
                 type_id: 1,
+                error_message: None,
                 type_arguments: Some(vec![UnifiedTypeApplication {
                     name: "type_0_type_arg_0".to_string(),
                     type_id: 2,
+                    error_message: None,
                     type_arguments: None,
                 }]),
             }]),
@@ -418,9 +420,11 @@ mod tests {
         let application = UnifiedTypeApplication {
             name: "ta_0".to_string(),
             type_id: 0,
+            error_message: None,
             type_arguments: Some(vec![UnifiedTypeApplication {
                 name: "ta_1".to_string(),
                 type_id: 1,
+                error_message: None,
                 type_arguments: None,
             }]),
         };
