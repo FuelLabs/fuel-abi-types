@@ -222,6 +222,7 @@ pub struct FullTypeApplication {
     pub name: String,
     pub type_decl: FullTypeDeclaration,
     pub type_arguments: Vec<FullTypeApplication>,
+    pub error_message: Option<String>,
 }
 
 impl FullTypeApplication {
@@ -246,6 +247,7 @@ impl FullTypeApplication {
             name: type_application.name.clone(),
             type_decl,
             type_arguments,
+            error_message: type_application.error_message.clone(),
         }
     }
 }
@@ -338,6 +340,7 @@ mod tests {
                 type_parameters: vec![],
             },
             type_arguments: vec![],
+            error_message: None,
         };
 
         let err = FullABIFunction::new("".to_string(), vec![], fn_output, vec![])
@@ -408,7 +411,9 @@ mod tests {
                         name: "type_0_type_arg_0".to_string(),
                         type_decl: type_2_decl.clone(),
                         type_arguments: vec![],
+                        error_message: None,
                     },],
+                    error_message: None,
                 },],
                 type_parameters: vec![type_2_decl],
             }
@@ -469,7 +474,10 @@ mod tests {
                         type_parameters: vec![],
                     },
                     type_arguments: vec![],
+                    error_message: None,
                 },],
+
+                error_message: None,
             }
         )
     }
