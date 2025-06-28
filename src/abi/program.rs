@@ -116,6 +116,8 @@ pub struct TypeConcreteDeclaration {
     pub metadata_type_id: Option<MetadataTypeId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_arguments: Option<Vec<ConcreteTypeId>>,
+    #[serde(rename = "aliasOf", skip_serializing_if = "Option::is_none")]
+    pub alias_of: Option<ConcreteTypeId>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -211,6 +213,7 @@ fn serde_json_serialization_tryout() {
         ),
         metadata_type_id: None,
         type_arguments: None,
+        alias_of: None,
     });
 
     abi.concrete_types.push(TypeConcreteDeclaration {
@@ -220,6 +223,7 @@ fn serde_json_serialization_tryout() {
         ),
         metadata_type_id: Some(MetadataTypeId(0)),
         type_arguments: None,
+        alias_of: None,
     });
 
     abi.metadata_types.push(TypeMetadataDeclaration {
