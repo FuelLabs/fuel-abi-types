@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, HashMap};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 use crate::{
     abi::program::{
@@ -52,6 +55,7 @@ impl UnifiedProgramABI {
                 extended_metadata_types.push(TypeMetadataDeclaration {
                     type_field: concrete_type_decl.type_field.clone(),
                     metadata_type_id: program::MetadataTypeId(next_metadata_type_id),
+                    concrete_type_id: concrete_type_decl.concrete_type_id.clone(),
                     components: None,
                     type_parameters: None,
                 });
@@ -198,6 +202,7 @@ pub struct UnifiedTypeDeclaration {
     pub type_field: String,
     pub components: Option<Vec<UnifiedTypeApplication>>,
     pub type_parameters: Option<Vec<usize>>,
+    pub alias_of: Option<Arc<UnifiedTypeApplication>>,
 }
 
 impl UnifiedTypeDeclaration {
@@ -221,6 +226,20 @@ impl UnifiedTypeDeclaration {
             .into_iter()
             .map(|id| id.0)
             .collect();
+
+        let alias_of = concrete_types_lookup
+            .get(&type_decl.concrete_type_id)
+            .and_then(|ctype| ctype.alias_of.as_ref())
+            .and_then(|alias_of_type_id| concrete_types_lookup.get(alias_of_type_id))
+            .map(|alias_of_type_decl| {
+                let unified_ta = UnifiedTypeApplication::from_concrete_type_id(
+                    alias_of_type_decl.type_field.clone(),
+                    alias_of_type_decl.concrete_type_id.clone(),
+                    concrete_types_lookup,
+                );
+                Arc::new(unified_ta)
+            });
+
         UnifiedTypeDeclaration {
             type_id: type_decl.metadata_type_id.0,
             type_field: type_decl.type_field.clone(),
@@ -234,6 +253,7 @@ impl UnifiedTypeDeclaration {
             } else {
                 Some(type_parameters)
             },
+            alias_of,
         }
     }
 
