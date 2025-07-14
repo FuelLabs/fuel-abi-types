@@ -186,6 +186,7 @@ pub struct FullTypeDeclaration {
     pub type_field: String,
     pub components: Vec<FullTypeApplication>,
     pub type_parameters: Vec<FullTypeDeclaration>,
+    pub alias_of: Option<Box<FullTypeApplication>>,
 }
 
 impl FullTypeDeclaration {
@@ -207,10 +208,15 @@ impl FullTypeDeclaration {
             .into_iter()
             .map(|id| FullTypeDeclaration::from_counterpart(types.get(&id).unwrap(), types))
             .collect();
+        let alias_of = type_decl
+            .alias_of
+            .as_ref()
+            .map(|alias| Box::new(FullTypeApplication::from_counterpart(alias, types)));
         FullTypeDeclaration {
             type_field: type_decl.type_field.clone(),
             components,
             type_parameters,
+            alias_of,
         }
     }
 
@@ -220,6 +226,10 @@ impl FullTypeDeclaration {
             .ok_or_else(|| error!("Couldn't extract custom type path from '{type_field}'"))?;
 
         TypePath::new(type_name)
+    }
+
+    pub fn alias_type_path(&self) -> Result<TypePath> {
+        TypePath::new(self.type_field.clone())
     }
 }
 
@@ -317,6 +327,10 @@ impl FullConfigurable {
 }
 
 impl FullTypeDeclaration {
+    pub fn is_alias_type(&self) -> bool {
+        self.alias_of.is_some()
+    }
+
     pub fn is_custom_type(&self) -> bool {
         self.is_struct_type() || self.is_enum_type()
     }
@@ -344,6 +358,7 @@ mod tests {
                 type_field: "SomeType".to_string(),
                 components: vec![],
                 type_parameters: vec![],
+                alias_of: None,
             },
             type_arguments: vec![],
             error_message: None,
@@ -372,6 +387,7 @@ mod tests {
                 }]),
             }]),
             type_parameters: Some(vec![2]),
+            alias_of: None,
         };
 
         let type_1 = UnifiedTypeDeclaration {
@@ -379,6 +395,7 @@ mod tests {
             type_field: "type_1".to_string(),
             components: None,
             type_parameters: None,
+            alias_of: None,
         };
 
         let type_2 = UnifiedTypeDeclaration {
@@ -386,6 +403,7 @@ mod tests {
             type_field: "type_2".to_string(),
             components: None,
             type_parameters: None,
+            alias_of: None,
         };
 
         let types = [&type_0, &type_1, &type_2]
@@ -401,6 +419,7 @@ mod tests {
             type_field: "type_2".to_string(),
             components: vec![],
             type_parameters: vec![],
+            alias_of: None,
         };
         assert_eq!(
             sut,
@@ -412,6 +431,7 @@ mod tests {
                         type_field: "type_1".to_string(),
                         components: vec![],
                         type_parameters: vec![],
+                        alias_of: None,
                     },
                     type_arguments: vec![FullTypeApplication {
                         name: "type_0_type_arg_0".to_string(),
@@ -422,6 +442,7 @@ mod tests {
                     error_message: None,
                 },],
                 type_parameters: vec![type_2_decl],
+                alias_of: None,
             }
         )
     }
@@ -445,6 +466,7 @@ mod tests {
             type_field: "type_0".to_string(),
             components: None,
             type_parameters: None,
+            alias_of: None,
         };
 
         let type_1 = UnifiedTypeDeclaration {
@@ -452,6 +474,7 @@ mod tests {
             type_field: "type_1".to_string(),
             components: None,
             type_parameters: None,
+            alias_of: None,
         };
 
         let types = [&type_0, &type_1]
@@ -471,6 +494,7 @@ mod tests {
                     type_field: "type_0".to_string(),
                     components: vec![],
                     type_parameters: vec![],
+                    alias_of: None,
                 },
                 type_arguments: vec![FullTypeApplication {
                     name: "ta_1".to_string(),
@@ -478,6 +502,7 @@ mod tests {
                         type_field: "type_1".to_string(),
                         components: vec![],
                         type_parameters: vec![],
+                        alias_of: None,
                     },
                     type_arguments: vec![],
                     error_message: None,
@@ -486,5 +511,52 @@ mod tests {
                 error_message: None,
             }
         )
+    }
+
+    #[test]
+    fn can_convert_alias_of() {
+        // Base type
+        let base_type = UnifiedTypeDeclaration {
+            type_id: 0,
+            type_field: "u64".to_string(),
+            components: None,
+            type_parameters: None,
+            alias_of: None,
+        };
+
+        // Alias type - it aliases the `base_type` above.
+        let alias_of_application = UnifiedTypeApplication {
+            name: "".to_string(),
+            type_id: 0, // points at `base_type`
+            error_message: None,
+            type_arguments: None,
+        };
+
+        let alias_type = UnifiedTypeDeclaration {
+            type_id: 1,
+            type_field: "U64Alias".to_string(),
+            components: None,
+            type_parameters: None,
+            alias_of: Some(Box::new(alias_of_application.clone())),
+        };
+
+        let types = [&base_type, &alias_type]
+            .into_iter()
+            .map(|t| (t.type_id, t.clone()))
+            .collect::<HashMap<_, _>>();
+
+        let sut = FullTypeDeclaration::from_counterpart(&alias_type, &types);
+
+        // 1. It really is treated as an alias.
+        assert!(sut.is_alias_type());
+
+        // 2. The inner `FullTypeApplication` matches what we expect.
+        let expected_alias = FullTypeApplication::from_counterpart(&alias_of_application, &types);
+        assert_eq!(sut.alias_of.as_deref(), Some(&expected_alias));
+
+        // 3. Other fields look right.
+        assert_eq!(sut.type_field, "U64Alias");
+        assert!(sut.components.is_empty());
+        assert!(sut.type_parameters.is_empty());
     }
 }
