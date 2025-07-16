@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
+use crate::abi::program::PanickingCall;
 use crate::{abi::program::Attribute, utils::extract_custom_type_name};
 
 use crate::{
@@ -33,6 +34,7 @@ pub struct FullProgramABI {
     pub message_types: Vec<FullMessageType>,
     pub configurables: Vec<FullConfigurable>,
     pub error_codes: BTreeMap<u64, ErrorDetails>,
+    pub panicking_calls: BTreeMap<u64, PanickingCall>,
 }
 
 impl FullProgramABI {
@@ -91,6 +93,10 @@ impl FullProgramABI {
             message_types,
             configurables,
             error_codes: unified_program_abi.error_codes.clone().unwrap_or_default(),
+            panicking_calls: unified_program_abi
+                .panicking_calls
+                .clone()
+                .unwrap_or_default(),
         })
     }
 }

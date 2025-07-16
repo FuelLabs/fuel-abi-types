@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::{
     abi::program::{
-        ABIFunction, Attribute, Configurable, LoggedType, ProgramABI, TypeApplication,
-        TypeConcreteDeclaration, TypeMetadataDeclaration,
+        ABIFunction, Attribute, Configurable, LoggedType, PanickingCall, ProgramABI,
+        TypeApplication, TypeConcreteDeclaration, TypeMetadataDeclaration,
     },
     utils::extract_custom_type_name,
 };
@@ -27,6 +27,7 @@ pub struct UnifiedProgramABI {
     pub messages_types: Option<Vec<UnifiedMessageType>>,
     pub configurables: Option<Vec<UnifiedConfigurable>>,
     pub error_codes: Option<BTreeMap<u64, ErrorDetails>>,
+    pub panicking_calls: Option<BTreeMap<u64, PanickingCall>>,
 }
 
 impl UnifiedProgramABI {
@@ -125,6 +126,7 @@ impl UnifiedProgramABI {
                 Some(configurables)
             },
             error_codes: program_abi.error_codes.clone(),
+            panicking_calls: program_abi.panicking_calls.clone(),
         })
     }
 }

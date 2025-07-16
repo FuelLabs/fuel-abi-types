@@ -23,19 +23,19 @@ pub const REVERT_WITH_LOG_SIGNAL: u64 = 0xffff_ffff_ffff_0006;
 
 #[derive(Error, Debug)]
 pub enum ErrorSignal {
-    #[error("Failing call to `std::revert::require`")]
+    #[error("Failing call to `std::revert::require`.")]
     Require,
-    #[error("Failing call to `std::token::transfer_to_address`")]
+    #[error("Failing call to `std::token::transfer_to_address`.")]
     TransferToAddress,
-    #[error("Failing call to `std::message::send_message`")]
+    #[error("Failing call to `std::message::send_message`.")]
     SendMessage,
-    #[error("Failing call to `std::assert::assert_eq`")]
+    #[error("Failing call to `std::assert::assert_eq`.")]
     AssertEq,
-    #[error("Failing call to `std::assert::assert`")]
+    #[error("Failing call to `std::assert::assert`.")]
     Assert,
-    #[error("Failing call to `std::assert::assert_ne`")]
+    #[error("Failing call to `std::assert::assert_ne`.")]
     AssertNe,
-    #[error("Failing call to `std::revert::revert_with_log`")]
+    #[error("Failing call to `std::revert::revert_with_log`.")]
     RevertWithLog,
 }
 
@@ -46,7 +46,7 @@ pub enum Error {
 }
 
 impl ErrorSignal {
-    /// Creates a new `ErrorSignal` from provided `revert_code`.
+    /// Creates a new [ErrorSignal] from provided `revert_code`.
     pub fn try_from_revert_code(revert_code: u64) -> Result<Self, Error> {
         if revert_code == FAILED_REQUIRE_SIGNAL {
             Ok(Self::Require)
@@ -67,8 +67,8 @@ impl ErrorSignal {
         }
     }
 
-    /// Converts this `ErrorSignal` to corresponding revert code. If the `ErroSignal` is `Unknown`,
-    /// returns `u64::MAX`.
+    /// Converts this [ErrorSignal] to corresponding revert code. If the [ErrorSignal] is `Unknown`,
+    /// returns [u64::MAX].
     pub fn to_revert_code(self) -> u64 {
         match self {
             ErrorSignal::Require => FAILED_REQUIRE_SIGNAL,
