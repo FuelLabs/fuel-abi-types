@@ -118,8 +118,6 @@ pub struct TypeMetadataDeclaration {
     #[serde(rename = "type")]
     pub type_field: String,
     pub metadata_type_id: MetadataTypeId,
-    #[serde(skip)]
-    pub concrete_type_id: Option<ConcreteTypeId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub components: Option<Vec<TypeApplication>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -286,7 +284,6 @@ fn serde_json_serialization_tryout() {
     abi.metadata_types.push(TypeMetadataDeclaration {
         type_field: "enum MyError".into(),
         metadata_type_id: MetadataTypeId(0),
-        concrete_type_id: None,
         components: Some(vec![TypeApplication {
             name: "MyErrorVariant".into(),
             type_id: TypeId::Concrete(ConcreteTypeId(
