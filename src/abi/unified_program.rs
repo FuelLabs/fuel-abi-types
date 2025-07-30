@@ -38,10 +38,15 @@ impl UnifiedProgramABI {
 
     pub fn from_counterpart(program_abi: &ProgramABI) -> Result<UnifiedProgramABI> {
         let mut extended_concrete_types = program_abi.concrete_types.clone();
-        let mut extended_metadata_types = program_abi.metadata_types.clone();
+        let mut extended_metadata_types: Vec<(Option<ConcreteTypeId>, TypeMetadataDeclaration)> =
+            program_abi
+                .metadata_types
+                .iter()
+                .map(|f| (None, f.clone()))
+                .collect::<Vec<_>>();
         let mut next_metadata_type_id = extended_metadata_types
             .iter()
-            .map(|v| v.metadata_type_id.0)
+            .map(|v| v.1.metadata_type_id.0)
             .max()
             .unwrap_or(0)
             + 1;
@@ -49,15 +54,19 @@ impl UnifiedProgramABI {
         // Ensure every concrete type has an associated type metadata.
         for concrete_type_decl in extended_concrete_types.iter_mut() {
             if concrete_type_decl.metadata_type_id.is_none() {
-                extended_metadata_types.push(TypeMetadataDeclaration {
+                let type_metadata_decl = TypeMetadataDeclaration {
                     type_field: concrete_type_decl.type_field.clone(),
                     metadata_type_id: program::MetadataTypeId(next_metadata_type_id),
                     components: None,
                     type_parameters: None,
-                });
+                };
                 concrete_type_decl.metadata_type_id =
-                    Some(program::MetadataTypeId(next_metadata_type_id));
+                    Some(program::MetadataTypeId(next_metadata_type_id).clone());
                 next_metadata_type_id += 1;
+                extended_metadata_types.push((
+                    Some(concrete_type_decl.concrete_type_id.clone()),
+                    type_metadata_decl,
+                ));
             }
         }
 
@@ -68,7 +77,13 @@ impl UnifiedProgramABI {
 
         let types = extended_metadata_types
             .iter()
-            .map(|ttype| UnifiedTypeDeclaration::from_counterpart(ttype, &concrete_types_lookup))
+            .map(|(opt_concrete_type_id, ttype)| {
+                UnifiedTypeDeclaration::from_counterpart(
+                    ttype,
+                    opt_concrete_type_id,
+                    &concrete_types_lookup,
+                )
+            })
             .collect();
 
         let functions = program_abi
@@ -198,11 +213,13 @@ pub struct UnifiedTypeDeclaration {
     pub type_field: String,
     pub components: Option<Vec<UnifiedTypeApplication>>,
     pub type_parameters: Option<Vec<usize>>,
+    pub alias_of: Option<Box<UnifiedTypeApplication>>,
 }
 
 impl UnifiedTypeDeclaration {
     pub fn from_counterpart(
         type_decl: &TypeMetadataDeclaration,
+        concrete_type_id: &Option<ConcreteTypeId>,
         concrete_types_lookup: &HashMap<ConcreteTypeId, TypeConcreteDeclaration>,
     ) -> UnifiedTypeDeclaration {
         let components: Vec<UnifiedTypeApplication> = type_decl
@@ -221,6 +238,23 @@ impl UnifiedTypeDeclaration {
             .into_iter()
             .map(|id| id.0)
             .collect();
+
+        let alias_of = match concrete_type_id {
+            Some(concrete_type_id) => concrete_types_lookup
+                .get(concrete_type_id)
+                .and_then(|ctype| ctype.alias_of.as_ref())
+                .and_then(|alias_of_type_id| concrete_types_lookup.get(alias_of_type_id))
+                .map(|alias_of_type_decl| {
+                    let unified_ta = UnifiedTypeApplication::from_concrete_type_id(
+                        alias_of_type_decl.type_field.clone(),
+                        alias_of_type_decl.concrete_type_id.clone(),
+                        concrete_types_lookup,
+                    );
+                    Box::new(unified_ta)
+                }),
+            None => None,
+        };
+
         UnifiedTypeDeclaration {
             type_id: type_decl.metadata_type_id.0,
             type_field: type_decl.type_field.clone(),
@@ -234,6 +268,7 @@ impl UnifiedTypeDeclaration {
             } else {
                 Some(type_parameters)
             },
+            alias_of,
         }
     }
 
