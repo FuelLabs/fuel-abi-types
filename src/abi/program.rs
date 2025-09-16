@@ -152,6 +152,7 @@ pub struct TypeApplication {
     pub type_id: TypeId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_message: Option<String>,
+    pub offset: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_arguments: Option<Vec<TypeApplication>>,
 }
@@ -285,6 +286,7 @@ fn serde_json_serialization_tryout() {
         type_field: "enum MyError".into(),
         metadata_type_id: MetadataTypeId(0),
         components: Some(vec![TypeApplication {
+            offset: None,
             name: "MyErrorVariant".into(),
             type_id: TypeId::Concrete(ConcreteTypeId(
                 "2e38e77b22c314a449e91fafed92a43826ac6aa403ae6a8acb6cf58239fbaf5d".into(),
