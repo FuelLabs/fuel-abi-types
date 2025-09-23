@@ -22,6 +22,7 @@ pub struct ProgramABI {
     pub messages_types: Option<Vec<MessageType>>,
     pub configurables: Option<Vec<Configurable>>,
     pub error_codes: Option<BTreeMap<u64, ErrorDetails>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub panicking_calls: Option<BTreeMap<u64, PanickingCall>>,
 }
 
@@ -152,6 +153,7 @@ pub struct TypeApplication {
     pub type_id: TypeId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error_message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub offset: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_arguments: Option<Vec<TypeApplication>>,
