@@ -123,6 +123,8 @@ pub struct TypeMetadataDeclaration {
     pub components: Option<Vec<TypeApplication>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_parameters: Option<Vec<MetadataTypeId>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alias_of: Option<MetadataTypeId>,
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,7 +137,7 @@ pub struct TypeConcreteDeclaration {
     pub metadata_type_id: Option<MetadataTypeId>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub type_arguments: Option<Vec<ConcreteTypeId>>,
-    #[serde(rename = "aliasOf", skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub alias_of: Option<ConcreteTypeId>,
 }
 
@@ -297,6 +299,7 @@ fn serde_json_serialization_tryout() {
             type_arguments: None,
         }]),
         type_parameters: None,
+        alias_of: None,
     });
 
     let mut error_codes = BTreeMap::new();
