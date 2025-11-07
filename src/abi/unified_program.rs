@@ -5,7 +5,7 @@ use crate::{
         ABIFunction, Attribute, Configurable, LoggedType, PanickingCall, ProgramABI,
         TypeApplication, TypeConcreteDeclaration, TypeMetadataDeclaration,
     },
-    utils::extract_custom_type_name,
+    utils::{extract_custom_type_name, extract_generic_name},
 };
 
 use crate::{
@@ -38,15 +38,11 @@ impl UnifiedProgramABI {
 
     pub fn from_counterpart(program_abi: &ProgramABI) -> Result<UnifiedProgramABI> {
         let mut extended_concrete_types = program_abi.concrete_types.clone();
-        let mut extended_metadata_types: Vec<(Option<ConcreteTypeId>, TypeMetadataDeclaration)> =
-            program_abi
-                .metadata_types
-                .iter()
-                .map(|f| (None, f.clone()))
-                .collect::<Vec<_>>();
+        let mut extended_metadata_types: Vec<TypeMetadataDeclaration> =
+            program_abi.metadata_types.to_vec();
         let mut next_metadata_type_id = extended_metadata_types
             .iter()
-            .map(|v| v.1.metadata_type_id.0)
+            .map(|v| v.metadata_type_id.0)
             .max()
             .unwrap_or(0)
             + 1;
@@ -59,32 +55,30 @@ impl UnifiedProgramABI {
                     metadata_type_id: program::MetadataTypeId(next_metadata_type_id),
                     components: None,
                     type_parameters: None,
+                    alias_of: None,
                 };
                 concrete_type_decl.metadata_type_id =
                     Some(program::MetadataTypeId(next_metadata_type_id).clone());
                 next_metadata_type_id += 1;
-                extended_metadata_types.push((
-                    Some(concrete_type_decl.concrete_type_id.clone()),
-                    type_metadata_decl,
-                ));
+                extended_metadata_types.push(type_metadata_decl);
             }
         }
 
         let concrete_types_lookup: HashMap<_, _> = extended_concrete_types
             .iter()
-            .map(|ttype| (ttype.concrete_type_id.clone(), ttype.clone()))
+            .map(|ty| (ty.concrete_type_id.clone(), ty.clone()))
             .collect();
 
         let types = extended_metadata_types
             .iter()
-            .map(|(opt_concrete_type_id, ttype)| {
+            .map(|ty| {
                 UnifiedTypeDeclaration::from_counterpart(
-                    ttype,
-                    opt_concrete_type_id,
+                    ty,
                     &concrete_types_lookup,
+                    &extended_metadata_types,
                 )
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
 
         let functions = program_abi
             .functions
@@ -219,9 +213,9 @@ pub struct UnifiedTypeDeclaration {
 impl UnifiedTypeDeclaration {
     pub fn from_counterpart(
         type_decl: &TypeMetadataDeclaration,
-        concrete_type_id: &Option<ConcreteTypeId>,
         concrete_types_lookup: &HashMap<ConcreteTypeId, TypeConcreteDeclaration>,
-    ) -> UnifiedTypeDeclaration {
+        metadata_types: &[TypeMetadataDeclaration],
+    ) -> Result<UnifiedTypeDeclaration> {
         let components: Vec<UnifiedTypeApplication> = type_decl
             .components
             .clone()
@@ -231,6 +225,7 @@ impl UnifiedTypeDeclaration {
                 UnifiedTypeApplication::from_counterpart(&application, concrete_types_lookup)
             })
             .collect();
+
         let type_parameters: Vec<usize> = type_decl
             .type_parameters
             .clone()
@@ -239,23 +234,24 @@ impl UnifiedTypeDeclaration {
             .map(|id| id.0)
             .collect();
 
-        let alias_of = match concrete_type_id {
-            Some(concrete_type_id) => concrete_types_lookup
-                .get(concrete_type_id)
-                .and_then(|ctype| ctype.alias_of.as_ref())
-                .and_then(|alias_of_type_id| concrete_types_lookup.get(alias_of_type_id))
-                .map(|alias_of_type_decl| {
-                    let unified_ta = UnifiedTypeApplication::from_concrete_type_id(
-                        alias_of_type_decl.type_field.clone(),
-                        alias_of_type_decl.concrete_type_id.clone(),
-                        concrete_types_lookup,
-                    );
-                    Box::new(unified_ta)
-                }),
-            None => None,
-        };
+        let alias_of = type_decl
+            .alias_of
+            .as_ref()
+            .map(|alias_id| -> Result<_> {
+                let metadata_type = metadata_types
+                    .get(alias_id.0)
+                    .ok_or_else(|| error!("Invalid metadata type id index for alias of"))?;
 
-        UnifiedTypeDeclaration {
+                Ok(Box::new(UnifiedTypeApplication {
+                    name: metadata_type.type_field.clone(),
+                    type_id: alias_id.0,
+                    error_message: None,
+                    type_arguments: None,
+                }))
+            })
+            .transpose()?;
+
+        Ok(UnifiedTypeDeclaration {
             type_id: type_decl.metadata_type_id.0,
             type_field: type_decl.type_field.clone(),
             components: if components.is_empty() {
@@ -269,7 +265,7 @@ impl UnifiedTypeDeclaration {
                 Some(type_parameters)
             },
             alias_of,
-        }
+        })
     }
 
     pub fn custom_type_path(&self) -> Result<TypePath> {
@@ -278,6 +274,10 @@ impl UnifiedTypeDeclaration {
             .ok_or_else(|| error!("Couldn't extract custom type path from '{type_field}'"))?;
 
         TypePath::new(type_name)
+    }
+
+    pub fn generic_name(&self) -> Option<String> {
+        extract_generic_name(&self.type_field)
     }
 }
 
@@ -470,5 +470,9 @@ impl UnifiedTypeDeclaration {
 
     pub fn is_struct_type(&self) -> bool {
         self.type_field.starts_with("struct ")
+    }
+
+    pub fn is_alias_type(&self) -> bool {
+        self.alias_of.is_some()
     }
 }
